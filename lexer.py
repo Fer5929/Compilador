@@ -20,6 +20,10 @@ def getToken(imprime=True):
     global linea
     global inicioLinea
     progLong = len(programa)
+    #agrega un espacio en blanco antes del $ para que el lexer lo reconozca como un fin de archivo
+    if programa.endswith('$') and progLong >= 2 and programa[-2] not in [' ', '\t', '\n']:
+        programa = programa[:-1] + ' $'
+        progLong = len(programa)
     # Ignorar espacios en blanco
     while posicion < progLong and programa[posicion] in [' ', '\t', '\n']:
         if programa[posicion] == '\n':
