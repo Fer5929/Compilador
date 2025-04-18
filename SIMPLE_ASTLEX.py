@@ -4,6 +4,8 @@ from enum import Enum
 from lexer import *
 from globalTypes import *
 
+
+
 class TipoExpresion(Enum):
     Op = 0
     Const = 1
@@ -467,6 +469,9 @@ def match(expectedToken):
 
 def parser(imprime=True):
     global token, tokenString, endentacion
+    global programa
+    global posicion
+    global progLong
     token, tokenString = getToken()
     endentacion = 0
 
