@@ -54,7 +54,6 @@ sync_tokens = {
 }
 
 def errorSintaxis(mensaje, posicion_error_manual=None):
-    from lexer import infoLinea, getToken
     global token, tokenString, Error
 
     if Error:
