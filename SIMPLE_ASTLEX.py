@@ -488,4 +488,3 @@ def parser(imprime=True):
             imprimeAST(AST)
 
     return AST
-
