@@ -165,26 +165,7 @@ def match(expectedToken):
         errorSintaxis(f"Se esperaba {expectedToken} pero se encontró {token}", posicionAnterior)
 
 
-def factor():
-    global token, tokenString
-    if token == TokenType.LPAREN:
-        match(TokenType.LPAREN)
-        t = expression()
-        match(TokenType.RPAREN)
-    elif token == TokenType.NUM:
-        t = nuevoNodo(TipoExpresion.Const)
-        t.val = tokenString
-        match(TokenType.NUM)
-    elif token == TokenType.ID:
-        nombre_id = tokenString
-        match(TokenType.ID)
-        if token == TokenType.LPAREN:
-            t = call(nombre_id)
-        else:
-            t = var(nombre_id)
-    else:
-        errorSintaxis('Expresión no válida en factor')
-    return t
+
 
 
 #args → [ arg-list ]
