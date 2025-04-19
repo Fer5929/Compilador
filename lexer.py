@@ -37,8 +37,8 @@ def getToken(imprime=True):
     #Revisa por el fin de archivo 
     #print('la posicion es', posicion , 'la longitud es', progLong)
     if posicion >= progLong or programa[posicion] == '$':
-        if imprime:
-            print('$ =', TokenType.ENDFILE)
+        #if imprime:
+            #print('$ =', TokenType.ENDFILE)
         return TokenType.ENDFILE, '$'
     
     #Se llama a reconocer para obtener el token y el lexema

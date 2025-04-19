@@ -4,7 +4,7 @@ from enum import Enum
 from lexer import *
 from globalTypes import *
 Error = False
-
+posicionAnterior = 0 
 
 class TipoExpresion(Enum):
     Op = 0
@@ -53,38 +53,43 @@ sync_tokens = {
     TokenType.ENDFILE
 }
 
-def errorSintaxis(mensaje):
+def errorSintaxis(mensaje, posicion_error_manual=None):
     from lexer import infoLinea, getToken
     global token, tokenString, Error
 
     if Error:
-        # Ya estamos manejando un error, no imprimir otro
         return
-
-    Error = True  # Entramos en modo de recuperación
+    Error = True
 
     linea_actual, inicio_linea, posicion_actual, prog = infoLinea()
 
-    # Buscar límites de línea
-    fin_linea = prog.find('\n', posicion_actual)
+    # ✅ Usa la posición pasada si está disponible
+    pos_uso = posicion_error_manual if posicion_error_manual is not None else posicion_actual
+
+    # 🔍 Calcular los límites de la línea que contiene pos_uso
+    inicio_linea_real = prog.rfind('\n', 0, pos_uso)
+    if inicio_linea_real == -1:
+        inicio_linea_real = 0
+    else:
+        inicio_linea_real += 1
+
+    fin_linea = prog.find('\n', pos_uso)
     if fin_linea == -1:
         fin_linea = len(prog)
-    contenido = prog[inicio_linea:fin_linea]
 
-    # Posición del error dentro de la línea
-    pos_error = posicion_actual - inicio_linea
+    contenido = prog[inicio_linea_real:fin_linea]
+    pos_error = pos_uso - inicio_linea_real
 
-    # Mostrar mensaje
     print(f"Línea {linea_actual}: {mensaje}")
     print(contenido)
     print(" " * pos_error + "^")
 
-    # 🔁 BOTÓN DE PÁNICO: avanzar hasta token válido
     while token not in sync_tokens and token != TokenType.ENDFILE:
         token, tokenString = getToken(imprime=False)
 
-    # Salimos del modo de error si encontramos algo sincronizable
-    Error = False
+
+
+
 
 def imprimeEspacios():
     print(' ' * endentacion, end='')
@@ -153,11 +158,13 @@ def imprimeAST(arbol):
     endentacion -= 2
 
 def match(expectedToken):
-    global token, tokenString
+    global token, tokenString, posicion, posicionAnterior
     if token == expectedToken:
+        posicionAnterior = posicion  # Guarda la posición actual antes de consumir token
         token, tokenString = getToken()
     else:
-        errorSintaxis(f"Se esperaba {expectedToken} pero se encontró {token}")
+        errorSintaxis(f"Se esperaba {expectedToken} pero se encontró {token}", posicionAnterior)
+
 
 def factor():
     global token, tokenString
@@ -242,6 +249,7 @@ def return_stmt():
 
 # expression-stmt → [expression] ";"
 def expression_stmt():
+    global posicionAnterior
     if token == TokenType.SEMICOLON:
         match(TokenType.SEMICOLON)
         nodo = nuevoNodo(TipoExpresion.ExprStmt)
@@ -249,25 +257,37 @@ def expression_stmt():
     else:
         nodo = nuevoNodo(TipoExpresion.ExprStmt)
         nodo.expresion = expression()
+        _, _, pos_actual, _ = infoLinea()
+        posicionAnterior = pos_actual
         match(TokenType.SEMICOLON)
     return nodo
 
 # statement → expression-stmt | compound-stmt | selection-stmt | iteration-stmt | return-stmt
 def statement():
+    global Error
+
     if token == TokenType.IF:
+        Error = False  # reiniciamos bandera si pudimos seguir normalmente
         return selection_stmt()
     elif token == TokenType.WHILE:
+        Error = False
         return iteration_stmt()
     elif token == TokenType.RETURN:
+        Error = False
         return return_stmt()
     elif token == TokenType.LKEY:
+        Error = False
         return compound_stmt()
-    else:
+    elif token in (TokenType.ID, TokenType.NUM, TokenType.LPAREN):
+        Error = False
         return expression_stmt()
+    else:
+        errorSintaxis("Error en la estructura de la sentencia:")
+        return None
 
 # expression → var = expression | simple-expression
 def expression():
-    global token, tokenString
+    global token, tokenString, posicionAnterior
     if token == TokenType.ID:
         nombre_id = tokenString
 
@@ -498,6 +518,8 @@ def match(expectedToken):
     if token == expectedToken:
         token, tokenString = getToken()
     else:
+        print("🧪 posicion actual:", posicion)
+        print("🧪 posicionAnterior:", posicionAnterior)
         errorSintaxis(f"Se esperaba {expectedToken} pero se encontró {token}")
 
 def parser(imprime=True):
