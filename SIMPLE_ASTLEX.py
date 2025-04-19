@@ -3,12 +3,7 @@
 from enum import Enum
 from lexer import *
 from globalTypes import *
-
-
-
-
-
-
+Error = False
 
 
 class TipoExpresion(Enum):
@@ -50,9 +45,46 @@ def nuevoNodo(tipo):
     t.exp = tipo
     return t
 
+# Conjunto de sincronización (lo que se puede usar para "reinsertarse")
+sync_tokens = {
+    TokenType.SEMICOLON,
+    TokenType.IF, TokenType.WHILE, TokenType.RETURN,
+    TokenType.LKEY, TokenType.RKEY, TokenType.LPAREN, TokenType.RPAREN,
+    TokenType.ENDFILE
+}
+
 def errorSintaxis(mensaje):
-    print(f'>>>>> Error de sintaxis: {mensaje}')
-    exit()
+    from lexer import infoLinea, getToken
+    global token, tokenString, Error
+
+    if Error:
+        # Ya estamos manejando un error, no imprimir otro
+        return
+
+    Error = True  # Entramos en modo de recuperación
+
+    linea_actual, inicio_linea, posicion_actual, prog = infoLinea()
+
+    # Buscar límites de línea
+    fin_linea = prog.find('\n', posicion_actual)
+    if fin_linea == -1:
+        fin_linea = len(prog)
+    contenido = prog[inicio_linea:fin_linea]
+
+    # Posición del error dentro de la línea
+    pos_error = posicion_actual - inicio_linea
+
+    # Mostrar mensaje
+    print(f"Línea {linea_actual}: {mensaje}")
+    print(contenido)
+    print(" " * pos_error + "^")
+
+    # 🔁 BOTÓN DE PÁNICO: avanzar hasta token válido
+    while token not in sync_tokens and token != TokenType.ENDFILE:
+        token, tokenString = getToken(imprime=False)
+
+    # Salimos del modo de error si encontramos algo sincronizable
+    Error = False
 
 def imprimeEspacios():
     print(' ' * endentacion, end='')
@@ -272,15 +304,12 @@ def peek_EQ_or_index_or_call():
 # simple-expression → additive-expression ( relop additive-expression )?
 # relop → < | <= | > | >= | == | !=
 def simple_expression():
-    print("📥 Entrando a simple_expression con token:", token, tokenString)
     t = additive_expression()
     if token in (TokenType.LT, TokenType.LE, TokenType.GT, TokenType.GE, TokenType.EQ, TokenType.NEQ,TokenType.EE):
-        print("📍 RELACIONAL detectado:", token, tokenString)
         p = nuevoNodo(TipoExpresion.Op)
         p.hijoIzq = t
         p.op = tokenString
         match(token)
-        print("📦 Después de relop, ahora token =", token, tokenString)
         p.hijoDer = additive_expression()
         return p
     else:
@@ -289,7 +318,6 @@ def simple_expression():
 # additive-expression → term { addop term }
 # addop → + | -
 def additive_expression():
-    print("🧮 Entrando a additive_expression con token:", token, tokenString)
     t = term()
     while token in (TokenType.PLUS, TokenType.MINUS):
         p = nuevoNodo(TipoExpresion.Op)

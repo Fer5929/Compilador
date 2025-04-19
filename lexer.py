@@ -45,8 +45,8 @@ def getToken(imprime=True):
     token, lexema = reconocer()
 
     #Variable de imprime que sirve dado que si es true imprime el token y el lexema 
-    if imprime:
-        print(lexema, "=", token)
+    #if imprime:
+        #print(lexema, "=", token)
 
     return token, lexema
 
@@ -335,3 +335,5 @@ def reconocer():
         return TokenType.ERROR, lexema
     else:
         return TokenType.ERROR, ''
+def infoLinea():
+    return linea, inicioLinea, posicion, programa
