@@ -4,7 +4,9 @@ from globalTypes import *
 linea = 1
 inicioLinea = 0
 #Funcion para inicializar las variables globales como pedida en las instrucciones
-def globales(prog, pos, long):
+#Se hizo el cambio de nombre de función para que no se confunda con la función de globales
+#Como referencia de este cambio se revisó la parte de el scanner.py y parser.py para TINY proporcionados
+def recibeLexer(prog, pos, long):
     global programa #corresponde al programa en un string
     global posicion #corresponde a la posicion siguiente del caracter a leer dentro del string
     global progLong #corresponde a la longitud del programa

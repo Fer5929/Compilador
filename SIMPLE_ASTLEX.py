@@ -6,6 +6,11 @@ from globalTypes import *
 
 
 
+
+
+
+
+
 class TipoExpresion(Enum):
     Op = 0
     Const = 1
@@ -468,10 +473,7 @@ def match(expectedToken):
         errorSintaxis(f"Se esperaba {expectedToken} pero se encontró {token}")
 
 def parser(imprime=True):
-    global token, tokenString, endentacion
-    global programa
-    global posicion
-    global progLong
+    global token, tokenString, endentacion, programa, posicion, progLong
     token, tokenString = getToken()
     endentacion = 0
 
@@ -488,3 +490,9 @@ def parser(imprime=True):
             imprimeAST(AST)
 
     return AST
+def globales(pro, pos, long):
+    global programa, posicion, progLong
+    programa = pro
+    posicion = pos
+    progLong = long
+    recibeLexer(programa, posicion, progLong)
