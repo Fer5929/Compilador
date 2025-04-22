@@ -1,0 +1,72 @@
+📌 Errores en declaraciones
+Falta ; después de una var-declaration
+
+Falta ID después de int o void
+
+Declaración de función sin paréntesis: int suma { ... }
+
+Uso de corchetes sin número: int arreglo[];
+
+Tamaño de arreglo sin número constante: int arreglo[x];
+
+📌 Errores en parámetros de funciones
+Parámetro sin nombre: int , int b
+
+Parámetro con int y numero (int 9)
+
+Coma final sin parámetro: int a, 
+
+
+📌 Errores en sentencias
+Falta ; en return; o x = 5
+
+if sin paréntesis: if x > 5
+
+while sin paréntesis o con paréntesis incompleto
+
+if (exp) sin bloque o sentencia
+
+else sin if previo
+
+📌 Errores en expresiones
+Asignación sin =: x + 1; cuando se espera x = ...
+Dice que no es válida en factor
+
+Uso de == o != sin ambos operandos: x == ;
+Dice que no es válida en factor
+
+Expresión entre paréntesis no cerrada: (x + y;
+
+a[2 +] — índice de arreglo con algo que no es un numero
+
+suma(1, , 2) — argumentos mal formateados
+
+📌 Errores en llamadas a funciones
+f( sin cerrar con )
+
+Argumentos mal formateados: f(1 2)
+revisar este error: 
+int = TokenType.INT
+suma = TokenType.ID
+( = TokenType.LPAREN
+1 = TokenType.NUM
+2 = TokenType.NUM
+>>>>> Error de sintaxis: Se esperaba TokenType.ID pero se encontró TokenType.NUM
+
+f 1, 2 sin paréntesis
+
+📌 Errores generales de agrupación
+Llaves desbalanceadas {} (faltan o sobran)
+>>>>> Error de sintaxis: El archivo no terminó correctamente
+
+Paréntesis sin cerrar: (a + b
+
+Corchetes sin cerrar: a[3 + x
+>>>>> Error de sintaxis: Expresión no válida en factor
+
+📌 Errores por tokens inesperados
+Token inesperado donde se espera un tipo (int, void)
+
+Operadores donde se espera una variable: + = x;
+
+Palabras reservadas usadas como ID: int if;
