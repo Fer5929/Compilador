@@ -376,3 +376,4 @@ def info_error():
     return linea, contenido, pos_error, inicioErrorLinea, finErrorLinea, posicionTokenAnterior, posicionTokenActual, contenido_anterior
 
 
+
