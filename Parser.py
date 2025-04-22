@@ -47,16 +47,14 @@ def nuevoNodo(tipo):
 
 # Conjunto de sincronización (lo que se puede usar para "reinsertarse")
 sync_tokens = {
-    TokenType.SEMICOLON,
-    TokenType.IF, TokenType.WHILE, TokenType.RETURN,
-    TokenType.LKEY, TokenType.RKEY, TokenType.LPAREN, TokenType.RPAREN,
-    TokenType.ENDFILE
+    TokenType.SEMICOLON
 }
 
 def errorSintaxis(mensaje):
 
     linea, contenido, pos_error, inicioErrorLinea, finErrorLinea, posicionTokenAnterior, posicionTokenActual, contenido_anterior= info_error()
     global programa, posicion, progLong
+    global token, tokenString
     inicioLineaAnterior = programa.rfind('\n', 0, inicioErrorLinea-1)
     if inicioLineaAnterior == -1:
         inicioLineaAnterior = 0
@@ -72,7 +70,17 @@ def errorSintaxis(mensaje):
         print(f"\nLínea {linea}: {mensaje}")
         print(contenido)
         print(" " * pos_error + "^")
-    exit()
+
+        # PANIC MODE: saltar tokens hasta encontrar uno del conjunto de sincronización
+    while token not in sync_tokens and token != TokenType.ENDFILE:
+        token, tokenString = getToken()
+
+    # Avanzar un token más si el token actual fue de sincronización (para evitar bucles)
+    if token in sync_tokens:
+        token, tokenString = getToken()
+    #Arreglar que se recorre cuando hay un error de token 
+    #Arreglar la recuperación de errores
+
     
 
 

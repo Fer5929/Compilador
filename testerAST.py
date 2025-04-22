@@ -1,8 +1,8 @@
 from globalTypes import *
-from SIMPLE_ASTLEX import *
+from Parser import *
 
 
-f = open("testerASTSimple.txt", "r")
+f = open("euclides.txt", "r")
 programa = f.read()
 progLong = len(programa)
 programa = programa + " $"
