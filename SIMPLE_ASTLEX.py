@@ -4,7 +4,7 @@ from enum import Enum
 from lexer import *
 from globalTypes import *
 Error = False
-posicionAnterior = 0 
+ 
 
 class TipoExpresion(Enum):
     Op = 0
@@ -53,38 +53,29 @@ sync_tokens = {
     TokenType.ENDFILE
 }
 
-def errorSintaxis(mensaje, posicion_error_manual=None):
-    global token, tokenString, Error
+def errorSintaxis(mensaje):
 
-    if Error:
-        return
-    Error = True
-
-    linea_actual, inicio_linea, posicion_actual, prog = infoLinea()
-
-    # ✅ Usa la posición pasada si está disponible
-    pos_uso = posicion_error_manual if posicion_error_manual is not None else posicion_actual
-
-    # 🔍 Calcular los límites de la línea que contiene pos_uso
-    inicio_linea_real = prog.rfind('\n', 0, pos_uso)
-    if inicio_linea_real == -1:
-        inicio_linea_real = 0
+    linea, contenido, pos_error, inicioErrorLinea, finErrorLinea, posicionTokenAnterior, posicionTokenActual, contenido_anterior= info_error()
+    global programa, posicion, progLong
+    inicioLineaAnterior = programa.rfind('\n', 0, inicioErrorLinea-1)
+    if inicioLineaAnterior == -1:
+        inicioLineaAnterior = 0
     else:
-        inicio_linea_real += 1
+        inicioLineaAnterior += 1
+    if posicionTokenActual - posicionTokenAnterior != 1 and errorToken == False:
+        linea = linea - 1
+        print(f"\nLínea {linea}: {mensaje}")
+        print (contenido_anterior)
+        pos_error = posicionTokenAnterior - inicioLineaAnterior
+        print(" " * pos_error + "^")
+    else:
+        print(f"\nLínea {linea}: {mensaje}")
+        print(contenido)
+        print(" " * pos_error + "^")
+    exit()
+    
 
-    fin_linea = prog.find('\n', pos_uso)
-    if fin_linea == -1:
-        fin_linea = len(prog)
 
-    contenido = prog[inicio_linea_real:fin_linea]
-    pos_error = pos_uso - inicio_linea_real
-
-    print(f"Línea {linea_actual}: {mensaje}")
-    print(contenido)
-    print(" " * pos_error + "^")
-
-    while token not in sync_tokens and token != TokenType.ENDFILE:
-        token, tokenString = getToken(imprime=False)
 
 
 
@@ -157,12 +148,11 @@ def imprimeAST(arbol):
     endentacion -= 2
 
 def match(expectedToken):
-    global token, tokenString, posicion, posicionAnterior
+    global token, tokenString
     if token == expectedToken:
-        posicionAnterior = posicion  # Guarda la posición actual antes de consumir token
         token, tokenString = getToken()
     else:
-        errorSintaxis(f"Se esperaba {expectedToken} pero se encontró {token}", posicionAnterior)
+        errorSintaxis(f"Se esperaba {expectedToken} pero se encontró {token}")
 
 
 
@@ -229,7 +219,6 @@ def return_stmt():
 
 # expression-stmt → [expression] ";"
 def expression_stmt():
-    global posicionAnterior
     if token == TokenType.SEMICOLON:
         match(TokenType.SEMICOLON)
         nodo = nuevoNodo(TipoExpresion.ExprStmt)
@@ -237,8 +226,6 @@ def expression_stmt():
     else:
         nodo = nuevoNodo(TipoExpresion.ExprStmt)
         nodo.expresion = expression()
-        _, _, pos_actual, _ = infoLinea()
-        posicionAnterior = pos_actual
         match(TokenType.SEMICOLON)
     return nodo
 
@@ -267,7 +254,7 @@ def statement():
 
 # expression → var = expression | simple-expression
 def expression():
-    global token, tokenString, posicionAnterior
+    global token, tokenString
     if token == TokenType.ID:
         nombre_id = tokenString
 
@@ -498,8 +485,6 @@ def match(expectedToken):
     if token == expectedToken:
         token, tokenString = getToken()
     else:
-        print("🧪 posicion actual:", posicion)
-        print("🧪 posicionAnterior:", posicionAnterior)
         errorSintaxis(f"Se esperaba {expectedToken} pero se encontró {token}")
 
 def parser(imprime=True):

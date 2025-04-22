@@ -3,6 +3,8 @@ from globalTypes import *
 
 linea = 1
 inicioLinea = 0
+posicionTokenActual = 0
+errorToken=False
 #Funcion para inicializar las variables globales como pedida en las instrucciones
 #Se hizo el cambio de nombre de función para que no se confunda con la función de globales
 #Como referencia de este cambio se revisó la parte de el scanner.py y parser.py para TINY proporcionados
@@ -21,6 +23,7 @@ def getToken(imprime=True):
     global progLong
     global linea
     global inicioLinea
+    global posicionTokenActual 
     progLong = len(programa)
     #agrega un espacio en blanco antes del $ para que el lexer lo reconozca como un fin de archivo
     if programa.endswith('$') and progLong >= 2 and programa[-2] not in [' ', '\t', '\n']:
@@ -33,6 +36,7 @@ def getToken(imprime=True):
             linea += 1
             inicioLinea = posicion + 1 #posicion de inicio de la linea va ir avanzando
         posicion += 1
+    posicionTokenActual = posicion 
 
     #Revisa por el fin de archivo 
     #print('la posicion es', posicion , 'la longitud es', progLong)
@@ -43,12 +47,15 @@ def getToken(imprime=True):
     
     #Se llama a reconocer para obtener el token y el lexema
     token, lexema = reconocer()
+    if token == TokenType.COMMENT:
+        return getToken(imprime)
 
     #Variable de imprime que sirve dado que si es true imprime el token y el lexema 
-    #if imprime:
+    #if imprime and token != TokenType.COMMENT:
         #print(lexema, "=", token)
-
+    
     return token, lexema
+    
 
 
 
@@ -331,9 +338,41 @@ def reconocer():
         print(f"Línea {linea}: Error en la formación de un token:")
         print(contenido)
         print(" " * pos_error + "^")
-
         return TokenType.ERROR, lexema
     else:
         return TokenType.ERROR, ''
-def infoLinea():
-    return linea, inicioLinea, posicion, programa
+    
+def info_error():
+    global programa, progLong, posicionTokenActual, errorToken
+
+    linea = programa.count('\n', 0, posicionTokenActual) + 1
+
+    # Encontrar el último token válido antes del error
+    posicionTokenAnterior = posicionTokenActual - 1
+    while posicionTokenAnterior >= 0 and programa[posicionTokenAnterior].isspace():
+        posicionTokenAnterior -= 1
+
+    inicioErrorLinea = programa.rfind('\n', 0, posicionTokenActual)
+    if inicioErrorLinea == -1:
+        inicioErrorLinea = 0
+    else:
+        inicioErrorLinea += 1
+
+    finErrorLinea = programa.find('\n', posicionTokenActual)
+    if finErrorLinea == -1:
+        finErrorLinea = progLong
+
+    contenido = programa[inicioErrorLinea:finErrorLinea]
+    pos_error = posicionTokenActual - inicioErrorLinea 
+
+    # Obtener contenido de la línea anterior
+    inicioLineaAnterior = programa.rfind('\n', 0, inicioErrorLinea-1)
+    if inicioLineaAnterior == -1:
+        inicioLineaAnterior = 0
+    else:
+        inicioLineaAnterior += 1
+    contenido_anterior = programa[inicioLineaAnterior:inicioErrorLinea-1]
+
+    return linea, contenido, pos_error, inicioErrorLinea, finErrorLinea, posicionTokenAnterior, posicionTokenActual, contenido_anterior
+
+
