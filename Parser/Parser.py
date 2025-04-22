@@ -1,11 +1,14 @@
-# Versión mejorada de SIMPLE_ASTLEX.py usando la gramática EBNF completa para expresiones aritméticas y sentencias
+#Parser para C- 
+#Sylvia Fernanda Colomo Fuente
+#A01781983
 
+#Importar librerías 
 from enum import Enum
 from lexer import *
 from globalTypes import *
 Error = False
  
-
+#Clase para enumerar los tipos de expresiones
 class TipoExpresion(Enum):
     Op = 0
     Const = 1
@@ -19,30 +22,32 @@ class TipoExpresion(Enum):
     VarDecl = 9 
     FunDecl = 10
 
+#Clase para crear el árbol de sintaxis abstracta
 class NodoArbol:
     def __init__(self):
         self.hijoIzq = None
         self.hijoDer = None
-        self.exp = None
-        self.op = None
-        self.val = None
-        self.nombre = None
-        self.args = []
-        self.indice = None
-        self.expresion = None
-        self.sentencias = []
-        self.condicion = None
-        self.entonces = None
-        self.sino = None
-        self.tipo = None
-        self.size = None
+        self.exp = None 
+        self.op = None #operador
+        self.val = None #valor
+        self.nombre = None #nombre
+        self.args = [] #argumentos
+        self.indice = None #índice
+        self.expresion = None #expresión
+        self.sentencias = [] #sentencias
+        self.condicion = None #condición if y while
+        self.entonces = None #entonces
+        self.sino = None #sino
+        self.tipo = None #tipo
+        self.size = None #tamaño
         #para funciones
-        self.parametros = []
-        self.cuerpo = None
+        self.parametros = [] #parámetros
+        self.cuerpo = None #cuerpo de una función 
 
+#Función para crear un nuevo nodo parte de lo más básico
 def nuevoNodo(tipo):
-    t = NodoArbol()
-    t.exp = tipo
+    t = NodoArbol() #crear un nuevo nodo
+    t.exp = tipo #tipo de expresión
     return t
 
 # Conjunto de sincronización (lo que se puede usar para "reinsertarse")
@@ -50,23 +55,26 @@ sync_tokens = {
     TokenType.SEMICOLON
 }
 
+#Función para el manejo de errores, marca con ^el error, y muestra el detalle de error sintactico 
 def errorSintaxis(mensaje):
-
+    #obtener información de error usando la función info_error() dentro del lexer 
     linea, contenido, pos_error, inicioErrorLinea, finErrorLinea, posicionTokenAnterior, posicionTokenActual, contenido_anterior= info_error()
     global programa, posicion, progLong
     global token, tokenString
+    
     inicioLineaAnterior = programa.rfind('\n', 0, inicioErrorLinea-1)
     if inicioLineaAnterior == -1:
         inicioLineaAnterior = 0
     else:
         inicioLineaAnterior += 1
+    #Si el token actual y el anterior no están en la misma linea, se decrementa el numero de linea y se usa el contenido anterior para mostrar el error 
     if posicionTokenActual - posicionTokenAnterior != 1 and errorToken == False:
         linea = linea - 1
         print(f"\nLínea {linea}: {mensaje}")
         print (contenido_anterior)
         pos_error = posicionTokenAnterior - inicioLineaAnterior
         print(" " * pos_error + "^")
-    else:
+    else: #si el token actual y el anterior están en la misma linea, se usa el contenido actual para mostrar el error 
         print(f"\nLínea {linea}: {mensaje}")
         print(contenido)
         print(" " * pos_error + "^")
@@ -75,26 +83,19 @@ def errorSintaxis(mensaje):
     while token not in sync_tokens and token != TokenType.ENDFILE:
         token, tokenString = getToken()
 
-    # Avanzar un token más si el token actual fue de sincronización (para evitar bucles)
+    # Avanzar un token más si el token actual fue de sincronización
     if token in sync_tokens:
         token, tokenString = getToken()
-    #Arreglar que se recorre cuando hay un error de token 
-    #Arreglar la recuperación de errores
 
-    
-
-
-
-
-
-
-
+#Función para imprimir los espacios en el árbol de sintaxis abstracta
 def imprimeEspacios():
     print(' ' * endentacion, end='')
 
+#Función para imprimir el árbol de sintaxis abstracta
+#Depende del tipo de expresión para saber que imprimir y el formato 
 def imprimeAST(arbol):
     global endentacion
-    endentacion += 2
+    endentacion += 2 #aumentar el nivel de indentación
     if arbol is not None:
         imprimeEspacios()
         if arbol.exp == TipoExpresion.VarDecl:
@@ -153,8 +154,9 @@ def imprimeAST(arbol):
         if hasattr(arbol, 'hijoDer') and arbol.hijoDer:
             imprimeAST(arbol.hijoDer)
 
-    endentacion -= 2
+    endentacion -= 2 #decrementar el nivel de indentación
 
+#Función para verificar si el token actual es el esperado
 def match(expectedToken):
     global token, tokenString
     if token == expectedToken:
@@ -162,8 +164,7 @@ def match(expectedToken):
     else:
         errorSintaxis(f"Se esperaba {expectedToken} pero se encontró {token}")
 
-
-
+#----------------------------------- Inicio de la gramática -----------------------------------
 
 
 #args → [ arg-list ]
@@ -488,23 +489,18 @@ def param():
 def program():
     return declaration_list()
 
-def match(expectedToken):
-    global token, tokenString
-    if token == expectedToken:
-        token, tokenString = getToken()
-    else:
-        errorSintaxis(f"Se esperaba {expectedToken} pero se encontró {token}")
-
+#Función para el parser
 def parser(imprime=True):
     global token, tokenString, endentacion, programa, posicion, progLong
     token, tokenString = getToken()
     endentacion = 0
 
-    AST = program()  # o statement(), o program(), según lo que estés probando
+    AST = program()  #de acuerdo a la gramática se empieza con program()
 
     if token != TokenType.ENDFILE:
         errorSintaxis("El archivo no terminó correctamente")
 
+    #imprimir el árbol de sintaxis abstracta
     if imprime:
         if isinstance(AST, list):
             for nodo in AST:
@@ -513,6 +509,8 @@ def parser(imprime=True):
             imprimeAST(AST)
 
     return AST
+
+#Función para pasar los datos a parser
 def globales(pro, pos, long):
     global programa, posicion, progLong
     programa = pro

@@ -342,6 +342,7 @@ def reconocer():
     else:
         return TokenType.ERROR, ''
     
+#Función nueva para pasar los datos del error al parser 
 def info_error():
     global programa, progLong, posicionTokenActual, errorToken
 
