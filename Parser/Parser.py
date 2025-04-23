@@ -179,7 +179,7 @@ def args():
     return lista
 
 
-# compound-stmt → "{" declaration-list "}"
+# compound-stmt → "{" { local-declarations } { statement } "}" 
 def compound_stmt():
     match(TokenType.LKEY)
     nodo = nuevoNodo(TipoExpresion.Compound)
@@ -296,8 +296,7 @@ def expression():
 def peek_EQ_or_index_or_call():
     return token in (TokenType.EQ, TokenType.LPAREN, TokenType.LBRACKET)
 
-# simple-expression → additive-expression
-# simple-expression → additive-expression ( relop additive-expression )?
+#simple-expression  → additive-expression [ relop additive-expression ] 
 # relop → < | <= | > | >= | == | !=
 def simple_expression():
     t = additive_expression()
@@ -344,8 +343,7 @@ def term():
         p.hijoDer = factor()
         t = p
     return t
-
-#factor → "(" expression ")" | number | ID
+#factor  → "(" expression ")" | var | call | NUM 
 def factor():
     global token, tokenString
 
