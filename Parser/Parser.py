@@ -394,15 +394,7 @@ def var(nombre_id):
         match(TokenType.RBRACKET)
     return nodo
 
-# args → expression { "," expression }
-def args():
-    lista = []
-    if token != TokenType.RPAREN:
-        lista.append(expression())
-        while token == TokenType.COMMA:
-            match(TokenType.COMMA)
-            lista.append(expression())
-    return lista
+
 
 # declaration-list → declaration { declaration }
 def declaration_list():
