@@ -46,14 +46,12 @@ class SymbolTable:
 
     def __str__(self):
         out = f"\nScope: {self.scope_name}"
+        out += f"\n{'Nombre':<12} | {'Tipo':<6} | {'Es Array':<9} | {'Línea':<5}"
+        out += f"\n{'-'*12}-+-{'-'*6}-+-{'-'*9}-+-{'-'*5}"
         for sym in self.symbols.values():
-            tipo_str = f"{sym.data_type} {sym.sym_type}"
-            if sym.sym_type == "param" and sym.is_array:
-                tipo_str += "[[]]"
-            elif sym.is_array:
-                tipo_str += f"[{sym.size}]"
-            out += f"\n  {sym.name} | {tipo_str} | línea {sym.linea}"
+            out += f"\n{sym.name:<12} | {sym.data_type:<6} | {str(sym.is_array):<9} | {str(sym.linea):<5}"
         return out
+
 
 # tabla()
 def tabla(tree, imprime=True):
