@@ -14,7 +14,7 @@ def globales(prog, pos, long):
     recibeLexer(programa, posicion, progLong)
 
 class Symbol:
-    def __init__(self, name, sym_type, data_type, is_array=False, size=None, linea=None):
+    def __init__(self, name, sym_type, data_type, is_array=False, size=None, linea=None, parametros=None):
         self.name = name
         self.sym_type = sym_type  # 'var', 'fun', 'param'
         self.data_type = data_type  # 'int', 'void'
@@ -22,6 +22,8 @@ class Symbol:
         self.size = size
         self.linea = linea if linea is not None else '?'
         self.references = []
+        self.parametros = parametros or []  # Nueva lista para funciones
+
 
 class SymbolTable:
     def __init__(self, scope_name, parent=None):
@@ -46,11 +48,13 @@ class SymbolTable:
 
     def __str__(self):
         out = f"\nScope: {self.scope_name}"
-        out += f"\n{'Nombre':<12} | {'Tipo':<6} | {'Es Array':<9} | {'Línea':<5}"
-        out += f"\n{'-'*12}-+-{'-'*6}-+-{'-'*9}-+-{'-'*5}"
+        out += f"\n{'Nombre':<12} | {'Tipo':<6} | {'Parámetros':<20} | {'Es Array':<9} | {'Línea':<5}"
+        out += f"\n{'-'*12}-+-{'-'*6}-+-{'-'*20}-+-{'-'*9}-+-{'-'*5}"
         for sym in self.symbols.values():
-            out += f"\n{sym.name:<12} | {sym.data_type:<6} | {str(sym.is_array):<9} | {str(sym.linea):<5}"
+            params = ', '.join(sym.parametros) if sym.sym_type == "fun" else "–"
+            out += f"\n{sym.name:<12} | {sym.data_type:<6} | {params:<20} | {str(sym.is_array):<9} | {str(sym.linea):<5}"
         return out
+
 
 
 # tabla()
@@ -82,7 +86,25 @@ def recorrer(nodo):
         nombre = nodo.nombre
         tipo = nodo.tipo
         linea = getattr(nodo, 'linea', '?')
-        simbolo = Symbol(nombre, "fun", tipo, False, None, linea)
+        # Crear lista de tipos de parámetros
+        lista_params = []
+        for param in nodo.parametros:
+            tipo_param = param.tipo
+            es_arreglo = param.size is not None or getattr(param, 'esArreglo', False)
+            if es_arreglo:
+                lista_params.append(f"{tipo_param} [array]")
+            else:
+                lista_params.append(tipo_param)
+
+        # Caso especial: función sin parámetros = void
+        if len(lista_params) == 0 and tipo == "void":
+            lista_params = ["void"]
+        if tipo == "void" and lista_params != ["void"]:
+            print(f"Línea {linea}: Error, una función void no debe tener parámetros.")
+
+        simbolo = Symbol(nombre, "fun", tipo, False, None, linea, lista_params)
+
+        
         if not current_scope.insert(simbolo):
             print(f"Línea {linea}: Error, función '{nombre}' redeclarada.")
         nuevo = SymbolTable(nombre, current_scope)
