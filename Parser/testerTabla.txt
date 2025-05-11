@@ -1,0 +1,28 @@
+/* Un programa para realizar ordenación por
+   selección en un arreglo de 10 elementos. */
+
+int x[20];
+
+int minimo (int a[], int high)
+{ int i; int x; int k;
+    k = 0;
+    x = a[0];
+    i = 1;
+    while (i < high)
+    { if (a[i] < x)
+        {   x = a[i];
+            k = i;}
+        i = i + 1;
+    }
+    return k;
+}
+
+void main(void)
+{   int i; int high;
+    i = 0;
+    high = input();
+    while (i < high)
+    {   x[i] = input();
+        i = i + 1;}
+    output(minimo(x, high));
+}

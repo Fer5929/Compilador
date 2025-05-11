@@ -1,0 +1,179 @@
+# semantica.py
+
+from globalTypes import *
+from lexer import *
+from Parser import *
+
+def globales(prog, pos, long):
+    global programa
+    global posicion
+    global progLong
+    programa = prog
+    posicion = pos
+    progLong = long
+    recibeLexer(programa, posicion, progLong)
+
+class Symbol:
+    def __init__(self, name, sym_type, data_type, is_array=False, size=None, linea=None):
+        self.name = name
+        self.sym_type = sym_type  # 'var', 'fun', 'param'
+        self.data_type = data_type  # 'int', 'void'
+        self.is_array = is_array
+        self.size = size
+        self.linea = linea if linea is not None else '?'
+        self.references = []
+
+class SymbolTable:
+    def __init__(self, scope_name, parent=None):
+        self.scope_name = scope_name
+        self.symbols = {}
+        self.parent = parent
+        self.children = []
+
+    def insert(self, symbol):
+        if symbol.name in self.symbols:
+            return False
+        self.symbols[symbol.name] = symbol
+        return True
+
+    def lookup(self, name):
+        t = self
+        while t:
+            if name in t.symbols:
+                return t.symbols[name]
+            t = t.parent
+        return None
+
+    def __str__(self):
+        out = f"\nScope: {self.scope_name}"
+        for sym in self.symbols.values():
+            tipo_str = f"{sym.data_type} {sym.sym_type}"
+            if sym.sym_type == "param" and sym.is_array:
+                tipo_str += "[[]]"
+            elif sym.is_array:
+                tipo_str += f"[{sym.size}]"
+            out += f"\n  {sym.name} | {tipo_str} | línea {sym.linea}"
+        return out
+
+# tabla()
+def tabla(tree, imprime=True):
+    global current_scope
+    current_scope = SymbolTable("global")
+
+    # Funciones predefinidas
+    current_scope.insert(Symbol("input", "fun", "int", False, None, 0))
+    current_scope.insert(Symbol("output", "fun", "void", False, None, 0))
+
+    for nodo in tree:
+        recorrer(nodo)
+    if imprime:
+        imprimir_tablas(current_scope)
+    return current_scope
+
+def imprimir_tablas(tabla, nivel=0):
+    print("  " * nivel + str(tabla))
+    for hijo in tabla.children:
+        imprimir_tablas(hijo, nivel + 1)
+
+def recorrer(nodo):
+    global current_scope
+    if nodo is None:
+        return
+
+    if nodo.exp == TipoExpresion.FunDecl:
+        nombre = nodo.nombre
+        tipo = nodo.tipo
+        linea = getattr(nodo, 'linea', '?')
+        simbolo = Symbol(nombre, "fun", tipo, False, None, linea)
+        if not current_scope.insert(simbolo):
+            print(f"Línea {linea}: Error, función '{nombre}' redeclarada.")
+        nuevo = SymbolTable(nombre, current_scope)
+        current_scope.children.append(nuevo)
+        old = current_scope
+        current_scope = nuevo
+        for param in nodo.parametros:
+            declarar(param, "param")
+        recorrer(nodo.cuerpo)
+        current_scope = old
+
+    elif nodo.exp == TipoExpresion.VarDecl:
+        declarar(nodo, "var")
+
+    elif nodo.exp == TipoExpresion.Compound:
+        decl_zone = True
+        for stmt in nodo.sentencias:
+            if stmt.exp == TipoExpresion.VarDecl:
+                if not decl_zone:
+                    print(f"Línea {getattr(stmt, 'linea', '?')}: Error, declaración después de sentencias.")
+                declarar(stmt, "var")
+            else:
+                decl_zone = False
+                recorrer(stmt)
+
+    elif nodo.exp == TipoExpresion.While:
+        recorrer(nodo.condicion)
+        recorrer(nodo.cuerpo)
+
+    elif nodo.exp == TipoExpresion.If:
+        recorrer(nodo.condicion)
+        recorrer(nodo.entonces)
+        if nodo.sino:
+            recorrer(nodo.sino)
+
+    elif nodo.exp == TipoExpresion.Return:
+        if nodo.expresion:
+            recorrer(nodo.expresion)
+
+    elif nodo.exp == TipoExpresion.Op:
+        if nodo.hijoIzq:
+            recorrer(nodo.hijoIzq)
+        if nodo.hijoDer:
+            recorrer(nodo.hijoDer)
+
+    elif nodo.exp == TipoExpresion.ExprStmt:
+        if nodo.expresion:
+            recorrer(nodo.expresion)
+
+    elif nodo.exp == TipoExpresion.Call:
+        ref = current_scope.lookup(nodo.nombre)
+        if not ref:
+            print(f"Línea {getattr(nodo, 'linea', '?')}: Error, llamada a función no declarada '{nodo.nombre}'.")
+        for arg in nodo.args:
+            recorrer(arg)
+
+    elif nodo.exp == TipoExpresion.Var:
+        ref = current_scope.lookup(nodo.nombre)
+        if not ref:
+            print(f"Línea {getattr(nodo, 'linea', '?')}: Error, variable '{nodo.nombre}' no declarada.")
+
+    else:
+        for attr in ["hijoIzq", "hijoDer", "condicion", "expresion", "entonces", "sino", "cuerpo"]:
+            sub = getattr(nodo, attr, None)
+            if isinstance(sub, NodoArbol):
+                recorrer(sub)
+        if hasattr(nodo, "args"):
+            for a in nodo.args:
+                recorrer(a)
+        if hasattr(nodo, "parametros"):
+            for p in nodo.parametros:
+                recorrer(p)
+        if hasattr(nodo, "sentencias"):
+            for s in nodo.sentencias:
+                recorrer(s)
+
+def declarar(nodo, tipo_simbolo):
+    global current_scope
+    nombre = nodo.nombre
+    tipo = nodo.tipo
+    linea = getattr(nodo, 'linea', '?')
+    es_arreglo = nodo.size is not None or getattr(nodo, 'esArreglo', False)
+    simbolo = Symbol(nombre, tipo_simbolo, tipo, es_arreglo, nodo.size, linea)
+    if not current_scope.insert(simbolo):
+        print(f"Línea {linea}: Error, identificador '{nombre}' ya declarado en este ámbito.")
+
+def semantica(tree, imprime=True):
+    if imprime:
+        print(">> Iniciando análisis semántico...")
+    tabla(tree, imprime)
+    if imprime:
+        print(">> Análisis semántico finalizado.")
