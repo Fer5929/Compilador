@@ -3,6 +3,7 @@
 from globalTypes import *
 from lexer import *
 from Parser import *
+current_function_type = None
 
 def globales(prog, pos, long):
     global programa
@@ -51,6 +52,8 @@ class SymbolTable:
         out += f"\n{'Nombre':<12} | {'Tipo':<6} | {'Parámetros':<20} | {'Es Array':<9} | {'Línea':<5}"
         out += f"\n{'-'*12}-+-{'-'*6}-+-{'-'*20}-+-{'-'*9}-+-{'-'*5}"
         for sym in self.symbols.values():
+            if sym.name in ["input", "output"]:
+                continue  # nunca los mostramos pero si se consideran 
             params = ', '.join(sym.parametros) if sym.sym_type == "fun" else "–"
             out += f"\n{sym.name:<12} | {sym.data_type:<6} | {params:<20} | {str(sym.is_array):<9} | {str(sym.linea):<5}"
         return out
@@ -99,8 +102,7 @@ def recorrer(nodo):
         # Caso especial: función sin parámetros = void
         if len(lista_params) == 0 and tipo == "void":
             lista_params = ["void"]
-        if tipo == "void" and lista_params != ["void"]:
-            print(f"Línea {linea}: Error, una función void no debe tener parámetros.")
+        
 
         simbolo = Symbol(nombre, "fun", tipo, False, None, linea, lista_params)
 
@@ -191,9 +193,118 @@ def declarar(nodo, tipo_simbolo):
     if not current_scope.insert(simbolo):
         print(f"Línea {linea}: Error, identificador '{nombre}' ya declarado en este ámbito.")
 
+#-------------- TYPECHECKING --------------
+def typeCheck(nodo):
+    global current_scope
+    global current_function_type
+
+    if nodo is None:
+        return None
+
+    if nodo.exp == TipoExpresion.Const:
+        return "int"
+
+    elif nodo.exp == TipoExpresion.Var:
+        ref = current_scope.lookup(nodo.nombre)
+        if not ref:
+            print(f"Línea {nodo.linea}: Error, variable '{nodo.nombre}' no declarada.")
+            return "error"
+        return ref.data_type
+
+    elif nodo.exp == TipoExpresion.Call:
+        ref = current_scope.lookup(nodo.nombre)
+        if not ref:
+            print(f"Línea {nodo.linea}: Error, función '{nodo.nombre}' no declarada.")
+            return "error"
+        if ref.sym_type != "fun":
+            print(f"Línea {nodo.linea}: Error, '{nodo.nombre}' no es una función.")
+            return "error"
+
+        if len(ref.parametros) != len(nodo.args):
+            print(f"Línea {nodo.linea}: Error, número de argumentos incorrecto para función '{nodo.nombre}'.")
+            return "error"
+
+        # Verificar tipos de argumentos
+        for i, arg in enumerate(nodo.args):
+            tipo_arg = typeCheck(arg)
+            tipo_esperado = ref.parametros[i].split()[0]  # por ej. "int [array]" → "int"
+            if tipo_arg != tipo_esperado:
+                print(f"Línea {nodo.linea}: Error, argumento {i+1} debe ser '{tipo_esperado}', pero se encontró '{tipo_arg}'.")
+                return "error"
+
+        return ref.data_type
+
+    elif nodo.exp == TipoExpresion.Op:
+        tipo_izq = typeCheck(nodo.hijoIzq)
+        tipo_der = typeCheck(nodo.hijoDer)
+        op = nodo.op
+
+        if tipo_izq != "int" or tipo_der != "int":
+            print(f"Línea {nodo.linea}: Error, operador '{op}' solo se puede aplicar entre enteros.")
+            return "error"
+
+        if op in ["<", ">", "<=", ">=", "==", "!="]:
+            return "int"  # En C-, condiciones son tipo int
+        elif op in ["+", "-", "*", "/"]:
+            return "int"
+        elif op == "=":
+            if tipo_izq != tipo_der:
+                print(f"Línea {nodo.linea}: Error, tipos incompatibles en asignación.")
+                return "error"
+            return tipo_izq
+        else:
+            print(f"Línea {nodo.linea}: Error, operador desconocido '{op}'.")
+            return "error"
+
+    elif nodo.exp == TipoExpresion.ExprStmt:
+        return typeCheck(nodo.expresion)
+
+    elif nodo.exp == TipoExpresion.Return:
+        tipo_expr = typeCheck(nodo.expresion) if nodo.expresion else "void"
+        if current_function_type == "void" and tipo_expr != "void":
+            print(f"Línea {nodo.linea}: Error, no se puede retornar un valor en una función void.")
+        elif current_function_type == "int" and tipo_expr != "int":
+            print(f"Línea {nodo.linea}: Error, se esperaba retorno de tipo int.")
+        return None
+
+    elif nodo.exp == TipoExpresion.If or nodo.exp == TipoExpresion.While:
+        tipo_cond = typeCheck(nodo.condicion)
+        if tipo_cond != "int":
+            print(f"Línea {nodo.linea}: Error, la condición debe ser de tipo int.")
+        typeCheck(nodo.entonces)
+        if hasattr(nodo, 'sino') and nodo.sino:
+            typeCheck(nodo.sino)
+        return None
+
+    elif nodo.exp == TipoExpresion.Compound:
+        for stmt in nodo.sentencias:
+            typeCheck(stmt)
+
+    elif nodo.exp == TipoExpresion.FunDecl:
+        
+        current_function_type = nodo.tipo
+
+        for child_scope in current_scope.children:
+            if child_scope.scope_name == nodo.nombre:
+                old_scope = current_scope
+                current_scope = child_scope
+                break
+        else:
+            old_scope = current_scope  # fallback
+
+        typeCheck(nodo.cuerpo)
+        current_scope = old_scope
+        current_function_type = None
+
+
+    return None
+
 def semantica(tree, imprime=True):
     if imprime:
         print(">> Iniciando análisis semántico...")
     tabla(tree, imprime)
+    for nodo in tree:
+        typeCheck(nodo)
     if imprime:
         print(">> Análisis semántico finalizado.")
+
