@@ -3,6 +3,7 @@
 from globalTypes import *
 from lexer import *
 from Parser import *
+
 current_function_type = None
 
 def globales(prog, pos, long):
@@ -49,14 +50,21 @@ class SymbolTable:
 
     def __str__(self):
         out = f"\nScope: {self.scope_name}"
-        out += f"\n{'Nombre':<12} | {'Tipo':<6} | {'Parámetros':<20} | {'Es Array':<9} | {'Línea':<5}"
-        out += f"\n{'-'*12}-+-{'-'*6}-+-{'-'*20}-+-{'-'*9}-+-{'-'*5}"
+        out += f"\n{'Nombre':<12} | {'Tipo':<6} | {'Parámetros':<20} | {'Es Array':<9} | {'Size':<5} | {'Línea':<5}"
+        out += f"\n{'-'*12}-+-{'-'*6}-+-{'-'*20}-+-{'-'*9}-+-{'-'*5}-+-{'-'*5}"
         for sym in self.symbols.values():
             if sym.name in ["input", "output"]:
-                continue  # nunca los mostramos pero si se consideran 
+                continue  # ocultar input/output
             params = ', '.join(sym.parametros) if sym.sym_type == "fun" else "–"
-            out += f"\n{sym.name:<12} | {sym.data_type:<6} | {params:<20} | {str(sym.is_array):<9} | {str(sym.linea):<5}"
+            size_str = (
+                "void" if sym.is_array and (sym.size is None or sym.size == '[]') else
+                str(sym.size) if sym.is_array else
+                "–"
+                )
+            out += f"\n{sym.name:<12} | {sym.data_type:<6} | {params:<20} | {str(sym.is_array):<9} | {size_str:<5} | {str(sym.linea):<5}"
         return out
+
+
 
 
 
@@ -79,6 +87,53 @@ def imprimir_tablas(tabla, nivel=0):
     print("  " * nivel + str(tabla))
     for hijo in tabla.children:
         imprimir_tablas(hijo, nivel + 1)
+
+# Función para manejar errores semánticos con el mismo formato que el parser
+def errorSemantico(mensaje, linea, nombre=None):
+    global programa, posicion, progLong
+    
+    # Encontrar la posición del error en el programa
+    posicionError = 0
+    lineas = programa.split('\n')
+    if linea <= len(lineas):
+        # Buscar la posición del identificador en la línea
+        if nombre:
+            posicionError = lineas[linea-1].find(nombre)
+            if posicionError == -1:  # Si no encuentra el nombre, usar el inicio de la línea
+                posicionError = 0
+        else:
+            posicionError = 0
+            
+        # Calcular la posición absoluta en el programa
+        posicionAbsoluta = sum(len(l) + 1 for l in lineas[:linea-1]) + posicionError
+        
+        # Obtener información de la línea anterior
+        inicioLineaAnterior = programa.rfind('\n', 0, posicionAbsoluta-1)
+        if inicioLineaAnterior == -1:
+            inicioLineaAnterior = 0
+        else:
+            inicioLineaAnterior += 1
+            
+        # Obtener el contenido de la línea actual
+        inicioErrorLinea = programa.rfind('\n', 0, posicionAbsoluta)
+        if inicioErrorLinea == -1:
+            inicioErrorLinea = 0
+        else:
+            inicioErrorLinea += 1
+            
+        finErrorLinea = programa.find('\n', posicionAbsoluta)
+        if finErrorLinea == -1:
+            finErrorLinea = len(programa)
+            
+        contenido = programa[inicioErrorLinea:finErrorLinea]
+        contenido_anterior = programa[inicioLineaAnterior:inicioErrorLinea-1]
+        
+        # Imprimir el error con el formato deseado
+        print(f"\nLínea {linea}: {mensaje}")
+        if contenido_anterior:
+            print(contenido_anterior)
+        print(contenido)
+        print(" " * posicionError + "^")
 
 def recorrer(nodo):
     global current_scope
@@ -103,12 +158,10 @@ def recorrer(nodo):
         if len(lista_params) == 0 and tipo == "void":
             lista_params = ["void"]
         
-
         simbolo = Symbol(nombre, "fun", tipo, False, None, linea, lista_params)
-
         
         if not current_scope.insert(simbolo):
-            print(f"Línea {linea}: Error, función '{nombre}' redeclarada.")
+            errorSemantico(f"Error, función '{nombre}' redeclarada.", linea, nombre)
         nuevo = SymbolTable(nombre, current_scope)
         current_scope.children.append(nuevo)
         old = current_scope
@@ -126,7 +179,7 @@ def recorrer(nodo):
         for stmt in nodo.sentencias:
             if stmt.exp == TipoExpresion.VarDecl:
                 if not decl_zone:
-                    print(f"Línea {getattr(stmt, 'linea', '?')}: Error, declaración después de sentencias.")
+                    errorSemantico("Error, declaración después de sentencias.", getattr(stmt, 'linea', '?'), stmt.nombre)
                 declarar(stmt, "var")
             else:
                 decl_zone = False
@@ -159,14 +212,14 @@ def recorrer(nodo):
     elif nodo.exp == TipoExpresion.Call:
         ref = current_scope.lookup(nodo.nombre)
         if not ref:
-            print(f"Línea {getattr(nodo, 'linea', '?')}: Error, llamada a función no declarada '{nodo.nombre}'.")
+            errorSemantico(f"Error, llamada a función no declarada '{nodo.nombre}'.", getattr(nodo, 'linea', '?'), nodo.nombre)
         for arg in nodo.args:
             recorrer(arg)
 
     elif nodo.exp == TipoExpresion.Var:
         ref = current_scope.lookup(nodo.nombre)
         if not ref:
-            print(f"Línea {getattr(nodo, 'linea', '?')}: Error, variable '{nodo.nombre}' no declarada.")
+            errorSemantico(f"Error, variable '{nodo.nombre}' no declarada.", getattr(nodo, 'linea', '?'), nodo.nombre)
 
     else:
         for attr in ["hijoIzq", "hijoDer", "condicion", "expresion", "entonces", "sino", "cuerpo"]:
@@ -191,7 +244,7 @@ def declarar(nodo, tipo_simbolo):
     es_arreglo = nodo.size is not None or getattr(nodo, 'esArreglo', False)
     simbolo = Symbol(nombre, tipo_simbolo, tipo, es_arreglo, nodo.size, linea)
     if not current_scope.insert(simbolo):
-        print(f"Línea {linea}: Error, identificador '{nombre}' ya declarado en este ámbito.")
+        errorSemantico(f"Error, identificador '{nombre}' ya declarado en este ámbito.", linea, nombre)
 
 #-------------- TYPECHECKING --------------
 def typeCheck(nodo):
@@ -207,12 +260,12 @@ def typeCheck(nodo):
     elif nodo.exp == TipoExpresion.Var:
         ref = current_scope.lookup(nodo.nombre)
         if not ref:
-            print(f"Línea {nodo.linea}: Error, variable '{nodo.nombre}' no declarada.")
+            errorSemantico(f"Error, variable '{nodo.nombre}' no declarada.", nodo.linea, nodo.nombre)
             return "error"
 
         # Validación si se usa índice con variable que no es arreglo
         if not ref.is_array and nodo.indice:
-            print(f"Línea {nodo.linea}: Error, la variable '{nodo.nombre}' no es un arreglo, no puede usarse con índice.")
+            errorSemantico(f"Error, la variable '{nodo.nombre}' no es un arreglo, no puede usarse con índice.", nodo.linea, nodo.nombre)
             return ref.data_type
 
         # Validación si es arreglo
@@ -220,29 +273,28 @@ def typeCheck(nodo):
             if nodo.indice:
                 tipo_indice = typeCheck(nodo.indice)
                 if tipo_indice != "int":
-                    print(f"Línea {nodo.linea}: Error, el índice del arreglo '{nodo.nombre}' debe ser de tipo int.")
+                    errorSemantico(f"Error, el índice del arreglo '{nodo.nombre}' debe ser de tipo int.", nodo.linea, nodo.nombre)
                 if nodo.indice.exp == TipoExpresion.Const:
                     indice_val = nodo.indice.val
                     if indice_val >= ref.size:
-                        print(f"Línea {nodo.linea}: Error, índice {indice_val} fuera del límite del arreglo '{nodo.nombre}'.")
+                        errorSemantico(f"Error, índice {indice_val} fuera del límite del arreglo '{nodo.nombre}'.", nodo.linea, nodo.nombre)
             else:
                 pass  # No se marca error
 
         return ref.data_type
 
-
     elif nodo.exp == TipoExpresion.Call:
         ref = current_scope.lookup(nodo.nombre)
         if not ref:
-            print(f"Línea {nodo.linea}: Error, función '{nodo.nombre}' no declarada.")
+            errorSemantico(f"Error, función '{nodo.nombre}' no declarada.", nodo.linea, nodo.nombre)
             return "error"
         if ref.sym_type != "fun":
-            print(f"Línea {nodo.linea}: Error, '{nodo.nombre}' no es una función.")
+            errorSemantico(f"Error, '{nodo.nombre}' no es una función.", nodo.linea, nodo.nombre)
             return "error"
 
         # Excepción: 'output' acepta cualquier número de argumentos
         if ref.name != "output" and len(ref.parametros) != len(nodo.args):
-            print(f"Línea {nodo.linea}: Error, número de argumentos incorrecto para función '{nodo.nombre}'.")
+            errorSemantico(f"Error, número de argumentos incorrecto para función '{nodo.nombre}'.", nodo.linea, nodo.nombre)
             return "error"
 
         # Verificar tipos de argumentos (excepto para output)
@@ -251,7 +303,7 @@ def typeCheck(nodo):
                 tipo_arg = typeCheck(arg)
                 tipo_esperado = ref.parametros[i].split()[0]  # por ej. "int [array]" → "int"
                 if tipo_arg != tipo_esperado:
-                    print(f"Línea {nodo.linea}: Error, argumento {i+1} debe ser '{tipo_esperado}', pero se encontró '{tipo_arg}'.")
+                    errorSemantico(f"Error, argumento {i+1} debe ser '{tipo_esperado}', pero se encontró '{tipo_arg}'.", nodo.linea, nodo.nombre)
                     return "error"
         else:
             for arg in nodo.args:
@@ -265,7 +317,7 @@ def typeCheck(nodo):
         op = nodo.op
 
         if tipo_izq != "int" or tipo_der != "int":
-            print(f"Línea {nodo.linea}: Error, operador '{op}' solo se puede aplicar entre enteros.")
+            errorSemantico(f"Error, operador '{op}' solo se puede aplicar entre enteros.", nodo.linea)
             return "error"
 
         if op in ["<", ">", "<=", ">=", "==", "!="]:
@@ -274,11 +326,11 @@ def typeCheck(nodo):
             return "int"
         elif op == "=":
             if tipo_izq != tipo_der:
-                print(f"Línea {nodo.linea}: Error, tipos incompatibles en asignación.")
+                errorSemantico(f"Error, tipos incompatibles en asignación.", nodo.linea)
                 return "error"
             return tipo_izq
         else:
-            print(f"Línea {nodo.linea}: Error, operador desconocido '{op}'.")
+            errorSemantico(f"Error, operador desconocido '{op}'.", nodo.linea)
             return "error"
 
     elif nodo.exp == TipoExpresion.ExprStmt:
@@ -287,15 +339,15 @@ def typeCheck(nodo):
     elif nodo.exp == TipoExpresion.Return:
         tipo_expr = typeCheck(nodo.expresion) if nodo.expresion else "void"
         if current_function_type == "void" and tipo_expr != "void":
-            print(f"Línea {nodo.linea}: Error, no se puede retornar un valor en una función void.")
+            errorSemantico(f"Error, no se puede retornar un valor en una función void.", nodo.linea)
         elif current_function_type == "int" and tipo_expr != "int":
-            print(f"Línea {nodo.linea}: Error, se esperaba retorno de tipo int.")
+            errorSemantico(f"Error, se esperaba retorno de tipo int.", nodo.linea)
         return None
 
     elif nodo.exp == TipoExpresion.If or nodo.exp == TipoExpresion.While:
         tipo_cond = typeCheck(nodo.condicion)
         if tipo_cond != "int":
-            print(f"Línea {nodo.linea}: Error, la condición debe ser de tipo int.")
+            errorSemantico(f"Error, la condición debe ser de tipo int.", nodo.linea)
         typeCheck(nodo.entonces)
         if hasattr(nodo, 'sino') and nodo.sino:
             typeCheck(nodo.sino)
@@ -306,7 +358,6 @@ def typeCheck(nodo):
             typeCheck(stmt)
 
     elif nodo.exp == TipoExpresion.FunDecl:
-        
         current_function_type = nodo.tipo
 
         for child_scope in current_scope.children:
@@ -321,7 +372,6 @@ def typeCheck(nodo):
         current_scope = old_scope
         current_function_type = None
 
-
     return None
 
 def semantica(tree, imprime=True):
@@ -334,7 +384,7 @@ def semantica(tree, imprime=True):
     # 🔍 Validar que exista función 'main' en el scope global
     main_func = current_scope.lookup("main")
     if not main_func or main_func.sym_type != "fun":
-        print("Error semántico: no se encontró la función 'main'.")
+        errorSemantico("Error semántico: no se encontró la función 'main'.", 1)
         return  # 🚫 DETENER: no continuar con typeCheck ni imprimir tabla
 
     # ✅ Si main existe, imprimir tabla ahora

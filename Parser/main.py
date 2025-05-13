@@ -5,7 +5,7 @@ from Parser import *
 from Semantica import *
 
 # Leer el archivo de entrada
-f = open('testerTabla.txt', 'r')
+f = open('testerconErrores.txt', 'r')
 programa = f.read()
 progLong = len(programa)
 programa = programa + '$'  # Agregar EOF
