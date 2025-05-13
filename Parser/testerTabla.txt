@@ -9,7 +9,7 @@ int minimo (int a[], int high)
     k = 0;
     x = a[0];
     i = 1;
-    p;
+ 
     while (k < high)
     { if (a[i] < x)
         {   x = a[i];
@@ -22,13 +22,11 @@ int minimo (int a[], int high)
 void main(int v)
 {   int i; int high;
     i = 0;
-    x[25]=9;
     high = input();
-    minimo(x,high,i);
     while (i < high)
     {   x[i] = input();
         i = i + 1;}
-    output(minimo(x,j));
+    output(minimo(x,high));
     return;
 }
 

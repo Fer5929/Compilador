@@ -43,7 +43,9 @@ def getToken(imprime=True):
     if posicion >= progLong or programa[posicion] == '$':
         #if imprime:
             #print('$ =', TokenType.ENDFILE)
-        return TokenType.ENDFILE, '$'
+        token = TokenType.ENDFILE
+        token.linea = linea
+        return token, '$'
     
     #Se llama a reconocer para obtener el token y el lexema
     token, lexema = reconocer()
@@ -54,6 +56,8 @@ def getToken(imprime=True):
     #if imprime and token != TokenType.COMMENT:
         #print(lexema, "=", token)
     
+    # Attach line number to token
+    token.linea = linea
     return token, lexema
     
 
