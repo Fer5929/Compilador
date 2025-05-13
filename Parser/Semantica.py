@@ -12,7 +12,7 @@ def globales(prog, pos, long):
     programa = prog
     posicion = pos
     progLong = long
-    recibeLexer(programa, posicion, progLong)
+    recibeParser(programa, posicion, progLong)
 
 class Symbol:
     def __init__(self, name, sym_type, data_type, is_array=False, size=None, linea=None, parametros=None):
@@ -209,7 +209,27 @@ def typeCheck(nodo):
         if not ref:
             print(f"Línea {nodo.linea}: Error, variable '{nodo.nombre}' no declarada.")
             return "error"
+
+        # Validación si se usa índice con variable que no es arreglo
+        if not ref.is_array and nodo.indice:
+            print(f"Línea {nodo.linea}: Error, la variable '{nodo.nombre}' no es un arreglo, no puede usarse con índice.")
+            return ref.data_type
+
+        # Validación si es arreglo
+        if ref.is_array:
+            if nodo.indice:
+                tipo_indice = typeCheck(nodo.indice)
+                if tipo_indice != "int":
+                    print(f"Línea {nodo.linea}: Error, el índice del arreglo '{nodo.nombre}' debe ser de tipo int.")
+                if nodo.indice.exp == TipoExpresion.Const:
+                    indice_val = nodo.indice.val
+                    if indice_val >= ref.size:
+                        print(f"Línea {nodo.linea}: Error, índice {indice_val} fuera del límite del arreglo '{nodo.nombre}'.")
+            else:
+                pass  # No se marca error
+
         return ref.data_type
+
 
     elif nodo.exp == TipoExpresion.Call:
         ref = current_scope.lookup(nodo.nombre)
@@ -220,17 +240,22 @@ def typeCheck(nodo):
             print(f"Línea {nodo.linea}: Error, '{nodo.nombre}' no es una función.")
             return "error"
 
-        if len(ref.parametros) != len(nodo.args):
+        # Excepción: 'output' acepta cualquier número de argumentos
+        if ref.name != "output" and len(ref.parametros) != len(nodo.args):
             print(f"Línea {nodo.linea}: Error, número de argumentos incorrecto para función '{nodo.nombre}'.")
             return "error"
 
-        # Verificar tipos de argumentos
-        for i, arg in enumerate(nodo.args):
-            tipo_arg = typeCheck(arg)
-            tipo_esperado = ref.parametros[i].split()[0]  # por ej. "int [array]" → "int"
-            if tipo_arg != tipo_esperado:
-                print(f"Línea {nodo.linea}: Error, argumento {i+1} debe ser '{tipo_esperado}', pero se encontró '{tipo_arg}'.")
-                return "error"
+        # Verificar tipos de argumentos (excepto para output)
+        if ref.name != "output":
+            for i, arg in enumerate(nodo.args):
+                tipo_arg = typeCheck(arg)
+                tipo_esperado = ref.parametros[i].split()[0]  # por ej. "int [array]" → "int"
+                if tipo_arg != tipo_esperado:
+                    print(f"Línea {nodo.linea}: Error, argumento {i+1} debe ser '{tipo_esperado}', pero se encontró '{tipo_arg}'.")
+                    return "error"
+        else:
+            for arg in nodo.args:
+                typeCheck(arg)  # Solo se evalúa para asegurar tipo válido, sin comparar
 
         return ref.data_type
 
@@ -302,9 +327,23 @@ def typeCheck(nodo):
 def semantica(tree, imprime=True):
     if imprime:
         print(">> Iniciando análisis semántico...")
-    tabla(tree, imprime)
+
+    # 🔍 Construir tabla de símbolos
+    tabla(tree, imprime=False)  # desactiva impresión temporal
+
+    # 🔍 Validar que exista función 'main' en el scope global
+    main_func = current_scope.lookup("main")
+    if not main_func or main_func.sym_type != "fun":
+        print("Error semántico: no se encontró la función 'main'.")
+        return  # 🚫 DETENER: no continuar con typeCheck ni imprimir tabla
+
+    # ✅ Si main existe, imprimir tabla ahora
+    if imprime:
+        imprimir_tablas(current_scope)
+
+    # 🔍 Type checking
     for nodo in tree:
         typeCheck(nodo)
+
     if imprime:
         print(">> Análisis semántico finalizado.")
-

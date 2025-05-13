@@ -40,14 +40,17 @@ class NodoArbol:
         self.sino = None #sino
         self.tipo = None #tipo
         self.size = None #tamaño
+        self.linea = None #línea del código
         #para funciones
         self.parametros = [] #parámetros
         self.cuerpo = None #cuerpo de una función 
 
 #Función para crear un nuevo nodo parte de lo más básico
 def nuevoNodo(tipo):
+    global token, tokenString
     t = NodoArbol() #crear un nuevo nodo
     t.exp = tipo #tipo de expresión
+    t.linea = getattr(token, 'linea', None) #obtener la línea del token actual
     return t
 
 # Conjunto de sincronización (lo que se puede usar para "reinsertarse")
@@ -491,17 +494,17 @@ def parser(imprime=True):
         errorSintaxis("El archivo no terminó correctamente")
 
     #imprimir el árbol de sintaxis abstracta
-    if imprime:
-        if isinstance(AST, list):
-            for nodo in AST:
-                imprimeAST(nodo)
-        else:
-            imprimeAST(AST)
+    #if imprime:
+     #   if isinstance(AST, list):
+     #       for nodo in AST:
+     #           imprimeAST(nodo)
+     #   else:
+     #       imprimeAST(AST)
 
     return AST
 
 #Función para pasar los datos a parser
-def globales(pro, pos, long):
+def recibeParser(pro, pos, long):
     global programa, posicion, progLong
     programa = pro
     posicion = pos
