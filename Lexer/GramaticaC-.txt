@@ -1,0 +1,68 @@
+program             → { declaration } 
+
+declaration-list → declaration { declaration } 
+
+
+declaration         → var-declaration | fun-declaration 
+
+var-declaration     → type-specifier ID [ "[" NUM "]" ] ";" 
+
+fun-declaration     → type-specifier ID "(" params ")" compound-stmt 
+
+type-specifier      → "int" | "void"
+
+params              → param-list | "void" 
+
+param-list          → param { "," param } 
+
+param               → type-specifier ID [ "[" "]" ] 
+
+compound-stmt       → "{" { local-declarations } { statement } "}" 
+
+local-declarations  → { var-declaration }
+
+statement-list      → { statement }
+
+statement           → expression-stmt 
+                    | compound-stmt
+                    | selection-stmt
+                    | iteration-stmt
+                    | return-stmt
+
+expression-stmt     → [ expression ] ";" 
+
+selection-stmt      → "if" "(" expression ")" statement [ "else" statement ] 
+
+iteration-stmt      → "while" "(" expression ")" statement 
+
+return-stmt         → "return" [ expression ] ";" 
+
+expression          → var "=" expression
+                    | simple-expression 
+
+var                 → ID [ "[" expression "]" ] 
+
+simple-expression   → additive-expression [ relop additive-expression ] 
+
+relop               → "<" | "<=" | ">" | ">=" | "==" | "!="
+
+additive-expression → term { addop term } 
+
+addop               → "+" | "-" 
+
+term                → factor { mulop factor } 
+
+mulop               → "*" | "/" 
+
+factor              → "(" expression ")" | var | call | NUM 
+
+call                → ID "(" args ")" 
+
+args                → [ arg-list ] 
+
+arg-list            → expression { "," expression } 
+
+
+
+
+statement-list      → { statement }
