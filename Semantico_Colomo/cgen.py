@@ -67,6 +67,16 @@ def genStmt(nodo):
             output.append(f"sw {valor}, {offset}($sp)  # {var_name} = ...")
         else:
             output.append(f"# ERROR: variable {var_name} no tiene offset asignado")
+    elif nodo.exp == TipoExpresion.Return:
+        if nodo.expresion:
+            valor = genExp(nodo.expresion)
+            output.append(f"move $v0, {valor}  # return valor")
+        
+                # Imprimir resultado antes de salir (debug)
+            output.append(f"move $a0, {valor}    # valor a imprimir")
+            output.append("li $v0, 1            # syscall: print int")
+            output.append("syscall")
+
 
 def genExp(nodo):
     if nodo.exp == TipoExpresion.Const:
