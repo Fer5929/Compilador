@@ -122,13 +122,15 @@ def genStmt(nodo):
         cond_reg = genExp(nodo.condicion)
         output.append(f"beq {cond_reg}, $zero, {et_else}  # if false -> else")
 
-        if nodo.entonces.exp == TipoExpresion.Compound:
-            for stmt in nodo.entonces.sentencias:
-                genStmt(stmt)
-        else:
-            genStmt(nodo.entonces)
+        if nodo.entonces:
+            if nodo.entonces.exp == TipoExpresion.Compound:
+                for stmt in nodo.entonces.sentencias:
+                    genStmt(stmt)
+            else:
+                genStmt(nodo.entonces)
 
         output.append(f"j {et_end}")
+
         output.append(f"{et_else}:")
         if nodo.sino:
             if nodo.sino.exp == TipoExpresion.Compound:
@@ -138,6 +140,8 @@ def genStmt(nodo):
                 genStmt(nodo.sino)
 
         output.append(f"{et_end}:")
+
+
 
     elif nodo.exp == TipoExpresion.While:
         et_start = nueva_etiqueta()
