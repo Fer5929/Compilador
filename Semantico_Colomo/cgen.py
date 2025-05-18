@@ -133,9 +133,6 @@ def genStmt(nodo):
             output.append("li $v0, 1          # syscall: print int")
             output.append("syscall")
 
-
-
-
 def genExp(nodo):
     if nodo.exp == TipoExpresion.Const:
         reg = nueva_temp()
@@ -146,7 +143,17 @@ def genExp(nodo):
         offset = offsets.get(nodo.nombre)
         reg = nueva_temp()
         if offset is not None:
-            output.append(f"lw {reg}, {offset}($sp)  # cargar {nodo.nombre}")
+            if nodo.indice:  # Si es acceso a arreglo
+                # Generar código para el índice
+                indice_reg = genExp(nodo.indice)
+                # Calcular offset del arreglo
+                output.append(f"li {reg}, {offset}")  # Cargar offset base
+                output.append(f"mul {indice_reg}, {indice_reg}, 4")  # Multiplicar índice por 4 (tamaño de int)
+                output.append(f"add {reg}, {reg}, {indice_reg}")  # Sumar offset base + offset del índice
+                output.append(f"add {reg}, {reg}, $sp")  # Sumar $sp para obtener dirección final
+                output.append(f"lw {reg}, 0({reg})")  # Cargar valor del arreglo
+            else:  # Si es variable normal
+                output.append(f"lw {reg}, {offset}($sp)  # cargar {nodo.nombre}")
         else:
             output.append(f"# ERROR: variable {nodo.nombre} no tiene offset asignado")
         return reg
@@ -156,7 +163,18 @@ def genExp(nodo):
         valor = genExp(nodo.hijoDer)
         offset = offsets.get(var_name)
         if offset is not None:
-            output.append(f"sw {valor}, {offset}($sp)  # {var_name} = ...")
+            if nodo.hijoIzq.indice:  # Si es asignación a arreglo
+                # Generar código para el índice
+                indice_reg = genExp(nodo.hijoIzq.indice)
+                # Calcular offset del arreglo
+                temp_reg = nueva_temp()
+                output.append(f"li {temp_reg}, {offset}")  # Cargar offset base
+                output.append(f"mul {indice_reg}, {indice_reg}, 4")  # Multiplicar índice por 4
+                output.append(f"add {temp_reg}, {temp_reg}, {indice_reg}")  # Sumar offset base + offset del índice
+                output.append(f"add {temp_reg}, {temp_reg}, $sp")  # Sumar $sp para obtener dirección final
+                output.append(f"sw {valor}, 0({temp_reg})  # {var_name}[{nodo.hijoIzq.indice.val}] = ...")
+            else:  # Si es asignación a variable normal
+                output.append(f"sw {valor}, {offset}($sp)  # {var_name} = ...")
         else:
             output.append(f"# ERROR: variable {var_name} no tiene offset asignado")
         return valor
