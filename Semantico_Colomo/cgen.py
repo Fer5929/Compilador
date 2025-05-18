@@ -94,10 +94,14 @@ def genStmt(nodo):
             genStmt(nodo.entonces)
         
         output.append(f"j {et_end}")  # salto a fin del if
-        # bloque 'else' (si existe)
+        # ELSE block
         output.append(f"{et_else}:")
         if nodo.sino:
-            genStmt(nodo.sino)
+            if nodo.sino.exp == TipoExpresion.Compound:
+                for stmt in nodo.sino.sentencias:
+                    genStmt(stmt)
+            else:
+                genStmt(nodo.sino)
 
         output.append(f"{et_end}:")
 
