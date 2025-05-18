@@ -7,10 +7,17 @@ temp_count = 0
 output = []
 offsets = {}  # { varName: offset }
 offset_actual = 0
+label_count = 0
+
+def nueva_etiqueta():
+    global label_count
+    etiqueta = f"L{label_count}"
+    label_count += 1
+    return etiqueta
 
 def nueva_temp():
     global temp_count
-    reg = f"$t{temp_count}"
+    reg = f"$t{temp_count % 10}"
     temp_count += 1
     return reg
 
@@ -55,10 +62,12 @@ def genFunMain(nodo):
             genStmt(stmt)
 
 def genStmt(nodo):
+    # Expresión sola: x = ...;
     if nodo.exp == TipoExpresion.ExprStmt:
         if nodo.expresion:
             genExp(nodo.expresion)
 
+    # Asignación como sentencia: x = ...;
     elif nodo.exp == TipoExpresion.Op and nodo.op == '=':
         var_name = nodo.hijoIzq.nombre
         valor = genExp(nodo.hijoDer)
@@ -67,15 +76,60 @@ def genStmt(nodo):
             output.append(f"sw {valor}, {offset}($sp)  # {var_name} = ...")
         else:
             output.append(f"# ERROR: variable {var_name} no tiene offset asignado")
+
+    # Sentencia if (...) { ... } [else { ... }]
+    elif nodo.exp == TipoExpresion.If:
+        et_else = nueva_etiqueta()
+        et_end = nueva_etiqueta()
+
+        cond_reg = genExp(nodo.condicion)
+        output.append(f"beq {cond_reg}, $zero, {et_else}  # if false -> else")
+
+        # bloque 'then'
+        # Ejecuta múltiples sentencias si es Compound
+        if nodo.entonces.exp == TipoExpresion.Compound:
+            for stmt in nodo.entonces.sentencias:
+                genStmt(stmt)
+        else:
+            genStmt(nodo.entonces)
+        
+        output.append(f"j {et_end}")  # salto a fin del if
+        # bloque 'else' (si existe)
+        output.append(f"{et_else}:")
+        if nodo.sino:
+            genStmt(nodo.sino)
+
+        output.append(f"{et_end}:")
+
+    # Sentencia while (...) { ... }
+    elif nodo.exp == TipoExpresion.While:
+        et_start = nueva_etiqueta()
+        et_exit = nueva_etiqueta()
+
+        output.append(f"{et_start}:")
+        cond_reg = genExp(nodo.condicion)
+        output.append(f"beq {cond_reg}, $zero, {et_exit}  # while false -> exit")
+
+        if nodo.entonces.exp == TipoExpresion.Compound:
+            for stmt in nodo.entonces.sentencias:
+                genStmt(stmt)
+        else:
+            genStmt(nodo.entonces)
+        output.append(f"j {et_start}")
+        output.append(f"{et_exit}:")
+
+    # Sentencia return ...;
     elif nodo.exp == TipoExpresion.Return:
         if nodo.expresion:
             valor = genExp(nodo.expresion)
             output.append(f"move $v0, {valor}  # return valor")
-        
-                # Imprimir resultado antes de salir (debug)
-            output.append(f"move $a0, {valor}    # valor a imprimir")
-            output.append("li $v0, 1            # syscall: print int")
+
+            # imprimir el valor (debug)
+            output.append(f"move $a0, {valor}  # valor a imprimir")
+            output.append("li $v0, 1          # syscall: print int")
             output.append("syscall")
+
+
 
 
 def genExp(nodo):
@@ -93,21 +147,7 @@ def genExp(nodo):
             output.append(f"# ERROR: variable {nodo.nombre} no tiene offset asignado")
         return reg
 
-    elif nodo.exp == TipoExpresion.Op and nodo.op != '=':
-        izq = genExp(nodo.hijoIzq)
-        der = genExp(nodo.hijoDer)
-        res = nueva_temp()
-        if nodo.op == '+':
-            output.append(f"add {res}, {izq}, {der}")
-        elif nodo.op == '-':
-            output.append(f"sub {res}, {izq}, {der}")
-        elif nodo.op == '*':
-            output.append(f"mul {res}, {izq}, {der}")
-        elif nodo.op == '/':
-            output.append(f"div {res}, {izq}, {der}")
-        return res
     elif nodo.exp == TipoExpresion.Op and nodo.op == '=':
-        # Asignación dentro de expresión
         var_name = nodo.hijoIzq.nombre
         valor = genExp(nodo.hijoDer)
         offset = offsets.get(var_name)
@@ -116,3 +156,34 @@ def genExp(nodo):
         else:
             output.append(f"# ERROR: variable {var_name} no tiene offset asignado")
         return valor
+
+    elif nodo.exp == TipoExpresion.Op:
+        izq = genExp(nodo.hijoIzq)
+        der = genExp(nodo.hijoDer)
+        res = nueva_temp()
+
+        if nodo.op == '+':
+            output.append(f"add {res}, {izq}, {der}")
+        elif nodo.op == '-':
+            output.append(f"sub {res}, {izq}, {der}")
+        elif nodo.op == '*':
+            output.append(f"mul {res}, {izq}, {der}")
+        elif nodo.op == '/':
+            output.append(f"div {res}, {izq}, {der}")
+        elif nodo.op == '<':
+            output.append(f"slt {res}, {izq}, {der}")
+        elif nodo.op == '>':
+            output.append(f"slt {res}, {der}, {izq}")
+        elif nodo.op == '<=':
+            output.append(f"slt {res}, {der}, {izq}")
+            output.append(f"xori {res}, {res}, 1")
+        elif nodo.op == '>=':
+            output.append(f"slt {res}, {izq}, {der}")
+            output.append(f"xori {res}, {res}, 1")
+        elif nodo.op == '==':
+            output.append(f"seq {res}, {izq}, {der}")
+        elif nodo.op == '!=':
+            output.append(f"sne {res}, {izq}, {der}")
+        else:
+            output.append(f"# ERROR: operador desconocido {nodo.op}")
+        return res
