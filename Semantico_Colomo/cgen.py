@@ -29,45 +29,83 @@ def codeGen(AST, filename):
     offset_actual = 0
 
     output.append(".text")
-    output.append(".globl main")
-    output.append("main:")
 
-    # Buscar función main en el AST
     for nodo in AST:
-        if nodo.exp == TipoExpresion.FunDecl and nodo.nombre == "main":
-            # Generar offsets para variables locales
-            scope_main = None
+        if nodo.exp == TipoExpresion.FunDecl:
+            scope = None
             for child in Semantica.tabla_global.children:
-                if child.scope_name == "main":
-                    scope_main = child
+                if child.scope_name == nodo.nombre:
+                    scope = child
                     break
-            if scope_main:
-                for var in scope_main.symbols.values():
-                    offset_actual -= 4
-                    offsets[var.name] = offset_actual
-            # Generar código
-            genFunMain(nodo)
+            if scope:
+                offsets = {}
+                offset_actual = 0
+                param_index = 0
+                for var in scope.symbols.values():
+                    if getattr(var, "param", False):
+                        offsets[var.name] = 8 + 4 * param_index
+                        param_index += 1
+                    else:
+                        offset_actual -= 4
+                        offsets[var.name] = offset_actual
 
-    # Exit syscall
-    output.append("li $v0, 10")
-    output.append("syscall")
+            if nodo.nombre == "main":
+                output.append(".globl main")
+                output.append("main:")
+                genFun(nodo, is_main=True)
+            else:
+                output.append(f"{nodo.nombre}:")
+                genFun(nodo)
+
+
+
 
     with open(filename, "w") as f:
         for line in output:
             f.write(line + "\n")
 
-def genFunMain(nodo):
+def genFun(nodo, is_main=False):
+    output.append("sub $sp, $sp, 8")      # espacio para $fp y $ra
+    output.append("sw $ra, 4($sp)")
+    output.append("sw $fp, 0($sp)")
+    output.append("move $fp, $sp")
+
+    # Solo reservar espacio si hay variables locales
+    locals_only = [offset for offset in offsets.values() if offset < 0]
+    local_size = -min(locals_only) if locals_only else 0
+    if local_size > 0:
+        output.append(f"sub $sp, $sp, {local_size}")
+
+    # Generar cuerpo de la función
     if nodo.cuerpo:
         for stmt in nodo.cuerpo.sentencias:
             genStmt(stmt)
 
+    # Liberar espacio para locales si fue reservado
+    if local_size > 0:
+        output.append(f"add $sp, $sp, {local_size}")
+
+    if is_main:
+        # Imprimir el valor de retorno (ya en $v0)
+        output.append("move $a0, $v0")
+        output.append("li $v0, 1")         # syscall: print int
+        output.append("syscall")
+
+        output.append("li $v0, 10")        # syscall: exit
+        output.append("syscall")
+    else:
+        output.append("move $sp, $fp")
+        output.append("lw $fp, 0($sp)")
+        output.append("lw $ra, 4($sp)")
+        output.append("add $sp, $sp, 8")
+        output.append("jr $ra")
+
+
 def genStmt(nodo):
-    # Expresión sola: x = ...;
     if nodo.exp == TipoExpresion.ExprStmt:
         if nodo.expresion:
             genExp(nodo.expresion)
 
-    # Asignación como sentencia: x = ...;
     elif nodo.exp == TipoExpresion.Op and nodo.op == '=':
         var_name = nodo.hijoIzq.nombre
         valor = genExp(nodo.hijoDer)
@@ -77,7 +115,6 @@ def genStmt(nodo):
         else:
             output.append(f"# ERROR: variable {var_name} no tiene offset asignado")
 
-    # Sentencia if (...) { ... } [else { ... }]
     elif nodo.exp == TipoExpresion.If:
         et_else = nueva_etiqueta()
         et_end = nueva_etiqueta()
@@ -85,16 +122,13 @@ def genStmt(nodo):
         cond_reg = genExp(nodo.condicion)
         output.append(f"beq {cond_reg}, $zero, {et_else}  # if false -> else")
 
-        # bloque 'then'
-        # Ejecuta múltiples sentencias si es Compound
         if nodo.entonces.exp == TipoExpresion.Compound:
             for stmt in nodo.entonces.sentencias:
                 genStmt(stmt)
         else:
             genStmt(nodo.entonces)
-        
-        output.append(f"j {et_end}")  # salto a fin del if
-        # ELSE block
+
+        output.append(f"j {et_end}")
         output.append(f"{et_else}:")
         if nodo.sino:
             if nodo.sino.exp == TipoExpresion.Compound:
@@ -105,7 +139,6 @@ def genStmt(nodo):
 
         output.append(f"{et_end}:")
 
-    # Sentencia while (...) { ... }
     elif nodo.exp == TipoExpresion.While:
         et_start = nueva_etiqueta()
         et_exit = nueva_etiqueta()
@@ -122,16 +155,11 @@ def genStmt(nodo):
         output.append(f"j {et_start}")
         output.append(f"{et_exit}:")
 
-    # Sentencia return ...;
     elif nodo.exp == TipoExpresion.Return:
         if nodo.expresion:
             valor = genExp(nodo.expresion)
             output.append(f"move $v0, {valor}  # return valor")
 
-            # imprimir el valor (debug)
-            output.append(f"move $a0, {valor}  # valor a imprimir")
-            output.append("li $v0, 1          # syscall: print int")
-            output.append("syscall")
 
 def genExp(nodo):
     if nodo.exp == TipoExpresion.Const:
@@ -143,17 +171,21 @@ def genExp(nodo):
         offset = offsets.get(nodo.nombre)
         reg = nueva_temp()
         if offset is not None:
-            if nodo.indice:  # Si es acceso a arreglo
-                # Generar código para el índice
+            if nodo.indice:
                 indice_reg = genExp(nodo.indice)
-                # Calcular offset del arreglo
-                output.append(f"li {reg}, {offset}")  # Cargar offset base
-                output.append(f"mul {indice_reg}, {indice_reg}, 4")  # Multiplicar índice por 4 (tamaño de int)
-                output.append(f"add {reg}, {reg}, {indice_reg}")  # Sumar offset base + offset del índice
-                output.append(f"add {reg}, {reg}, $sp")  # Sumar $sp para obtener dirección final
-                output.append(f"lw {reg}, 0({reg})")  # Cargar valor del arreglo
-            else:  # Si es variable normal
-                output.append(f"lw {reg}, {offset}($sp)  # cargar {nodo.nombre}")
+                output.append(f"li {reg}, {offset}")
+                output.append(f"mul {indice_reg}, {indice_reg}, 4")
+                output.append(f"add {reg}, {reg}, {indice_reg}")
+                if offset >= 0:
+                    output.append(f"add {reg}, {reg}, $fp")
+                else:
+                    output.append(f"add {reg}, {reg}, $sp")
+                output.append(f"lw {reg}, 0({reg})")
+            else:
+                if offset >= 0:
+                    output.append(f"lw {reg}, {offset}($fp)  # cargar param {nodo.nombre}")
+                else:
+                    output.append(f"lw {reg}, {offset}($sp)  # cargar var {nodo.nombre}")
         else:
             output.append(f"# ERROR: variable {nodo.nombre} no tiene offset asignado")
         return reg
@@ -163,18 +195,22 @@ def genExp(nodo):
         valor = genExp(nodo.hijoDer)
         offset = offsets.get(var_name)
         if offset is not None:
-            if nodo.hijoIzq.indice:  # Si es asignación a arreglo
-                # Generar código para el índice
+            if nodo.hijoIzq.indice:
                 indice_reg = genExp(nodo.hijoIzq.indice)
-                # Calcular offset del arreglo
                 temp_reg = nueva_temp()
-                output.append(f"li {temp_reg}, {offset}")  # Cargar offset base
-                output.append(f"mul {indice_reg}, {indice_reg}, 4")  # Multiplicar índice por 4
-                output.append(f"add {temp_reg}, {temp_reg}, {indice_reg}")  # Sumar offset base + offset del índice
-                output.append(f"add {temp_reg}, {temp_reg}, $sp")  # Sumar $sp para obtener dirección final
-                output.append(f"sw {valor}, 0({temp_reg})  # {var_name}[{nodo.hijoIzq.indice.val}] = ...")
-            else:  # Si es asignación a variable normal
-                output.append(f"sw {valor}, {offset}($sp)  # {var_name} = ...")
+                output.append(f"li {temp_reg}, {offset}")
+                output.append(f"mul {indice_reg}, {indice_reg}, 4")
+                output.append(f"add {temp_reg}, {temp_reg}, {indice_reg}")
+                if offset >= 0:
+                    output.append(f"add {temp_reg}, $fp, {temp_reg}")
+                else:
+                    output.append(f"add {temp_reg}, $sp, {temp_reg}")
+                output.append(f"sw {valor}, 0({temp_reg})  # {var_name}[...] = ...")
+            else:
+                if offset >= 0:
+                    output.append(f"sw {valor}, {offset}($fp)  # asignar param {var_name}")
+                else:
+                    output.append(f"sw {valor}, {offset}($sp)  # asignar var {var_name}")
         else:
             output.append(f"# ERROR: variable {var_name} no tiene offset asignado")
         return valor
@@ -208,4 +244,15 @@ def genExp(nodo):
             output.append(f"sne {res}, {izq}, {der}")
         else:
             output.append(f"# ERROR: operador desconocido {nodo.op}")
+        return res
+
+    elif nodo.exp == TipoExpresion.Call:
+        for arg in reversed(nodo.args):
+            val = genExp(arg)
+            output.append("sub $sp, $sp, 4")
+            output.append(f"sw {val}, 0($sp)")
+        output.append(f"jal {nodo.nombre}")
+        output.append(f"add $sp, $sp, {len(nodo.args) * 4}")
+        res = nueva_temp()
+        output.append(f"move {res}, $v0")
         return res
