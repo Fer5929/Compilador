@@ -116,12 +116,13 @@ def genStmt(nodo):
             output.append(f"# ERROR: variable {var_name} no tiene offset asignado")
 
     elif nodo.exp == TipoExpresion.If:
-        et_else = nueva_etiqueta()
-        et_end = nueva_etiqueta()
+        et_else = nueva_etiqueta()  # etiqueta para el else
+        et_end = nueva_etiqueta()   # etiqueta para el final del if
 
         cond_reg = genExp(nodo.condicion)
         output.append(f"beq {cond_reg}, $zero, {et_else}  # if false -> else")
 
+    #    THEN
         if nodo.entonces:
             if nodo.entonces.exp == TipoExpresion.Compound:
                 for stmt in nodo.entonces.sentencias:
@@ -129,8 +130,9 @@ def genStmt(nodo):
             else:
                 genStmt(nodo.entonces)
 
-        output.append(f"j {et_end}")
+        output.append(f"j {et_end}")  # salto al final del if (saltamos else)
 
+    #    ELSE
         output.append(f"{et_else}:")
         if nodo.sino:
             if nodo.sino.exp == TipoExpresion.Compound:
@@ -139,7 +141,9 @@ def genStmt(nodo):
             else:
                 genStmt(nodo.sino)
 
+        # END
         output.append(f"{et_end}:")
+
 
 
 
@@ -151,13 +155,16 @@ def genStmt(nodo):
         cond_reg = genExp(nodo.condicion)
         output.append(f"beq {cond_reg}, $zero, {et_exit}  # while false -> exit")
 
-        if nodo.entonces.exp == TipoExpresion.Compound:
-            for stmt in nodo.entonces.sentencias:
-                genStmt(stmt)
-        else:
-            genStmt(nodo.entonces)
+        if nodo.entonces:
+            if nodo.entonces.exp == TipoExpresion.Compound:
+                for stmt in nodo.entonces.sentencias:
+                    genStmt(stmt)
+            else:
+                genStmt(nodo.entonces)
+
         output.append(f"j {et_start}")
         output.append(f"{et_exit}:")
+
 
     elif nodo.exp == TipoExpresion.Return:
         if nodo.expresion:
@@ -215,6 +222,7 @@ def genExp(nodo):
                     output.append(f"sw {valor}, {offset}($fp)  # asignar param {var_name}")
                 else:
                     output.append(f"sw {valor}, {offset}($sp)  # asignar var {var_name}")
+
         else:
             output.append(f"# ERROR: variable {var_name} no tiene offset asignado")
         return valor
