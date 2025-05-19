@@ -251,12 +251,29 @@ def genExp(nodo):
         return res
 
     elif nodo.exp == TipoExpresion.Call:
-        for arg in reversed(nodo.args):
-            val = genExp(arg)
-            output.append("sub $sp, $sp, 4")
-            output.append(f"sw {val}, 0($sp)")
-        output.append(f"jal {nodo.nombre}")
-        output.append(f"add $sp, $sp, {len(nodo.args) * 4}")
-        res = nueva_temp()
-        output.append(f"move {res}, $v0")
-        return res
+        if nodo.nombre == "input":
+            output.append("li $v0, 5")      # syscall: read int 
+            output.append("syscall")
+            res = nueva_temp()
+            output.append(f"move {res}, $v0")
+            output.append("# leyendo entero con input()")
+            return res
+        elif nodo.nombre == "output":
+            val = genExp(nodo.args[0])
+            output.append(f"move $a0, {val}")
+            output.append("li $v0, 1")      # syscall: print int
+            output.append("syscall")
+            output.append("# imprimiendo entero con output()")
+            res = nueva_temp()
+            output.append(f"li {res}, 0")
+            return res
+        else:
+            for arg in reversed(nodo.args): # empujar argumentos en la pila
+                val = genExp(arg)
+                output.append("sub $sp, $sp, 4")
+                output.append(f"sw {val}, 0($sp)")
+            output.append(f"jal {nodo.nombre}")
+            output.append(f"add $sp, $sp, {len(nodo.args) * 4}")
+            res = nueva_temp()
+            output.append(f"move {res}, $v0")
+            return res
