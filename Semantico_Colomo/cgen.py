@@ -21,6 +21,17 @@ def nueva_temp():
     temp_count += 1
     return reg
 
+def generar_data_section():
+    data_lines = [".data"]
+    global_scope = Semantica.tabla_global
+    for var in global_scope.symbols.values():
+        if var.sym_type == "var":
+            if var.is_array and var.size:
+                data_lines.append(f"{var.name}: .space {int(var.size)*4}")
+            else:
+                data_lines.append(f"{var.name}: .word 0")
+    return data_lines
+
 def codeGen(AST, filename):
     global output, temp_count, offsets, offset_actual
     output = []
@@ -28,6 +39,9 @@ def codeGen(AST, filename):
     offsets = {}
     offset_actual = 0
 
+    # Generar sección .data primero
+    data_section = generar_data_section()
+    output.extend(data_section)
     output.append(".text")
 
     for nodo in AST:
@@ -46,7 +60,10 @@ def codeGen(AST, filename):
                         offsets[var.name] = 8 + 4 * param_index
                         param_index += 1
                     else:
-                        offset_actual -= 4
+                        if getattr(var, "is_array", False) and getattr(var, "size", 0):
+                            offset_actual -= int (var.size) * 4
+                        else:
+                            offset_actual -= 4
                         offsets[var.name] = offset_actual
 
             if nodo.nombre == "main":
@@ -56,9 +73,6 @@ def codeGen(AST, filename):
             else:
                 output.append(f"{nodo.nombre}:")
                 genFun(nodo)
-
-
-
 
     with open(filename, "w") as f:
         for line in output:
@@ -116,13 +130,12 @@ def genStmt(nodo):
             output.append(f"# ERROR: variable {var_name} no tiene offset asignado")
 
     elif nodo.exp == TipoExpresion.If:
-        et_else = nueva_etiqueta()  # etiqueta para el else
-        et_end = nueva_etiqueta()   # etiqueta para el final del if
+        et_else = nueva_etiqueta()
+        et_end = nueva_etiqueta()
 
         cond_reg = genExp(nodo.condicion)
         output.append(f"beq {cond_reg}, $zero, {et_else}  # if false -> else")
 
-    #    THEN
         if nodo.entonces:
             if nodo.entonces.exp == TipoExpresion.Compound:
                 for stmt in nodo.entonces.sentencias:
@@ -130,9 +143,8 @@ def genStmt(nodo):
             else:
                 genStmt(nodo.entonces)
 
-        output.append(f"j {et_end}")  # salto al final del if (saltamos else)
+        output.append(f"j {et_end}")
 
-    #    ELSE
         output.append(f"{et_else}:")
         if nodo.sino:
             if nodo.sino.exp == TipoExpresion.Compound:
@@ -141,9 +153,7 @@ def genStmt(nodo):
             else:
                 genStmt(nodo.sino)
 
-        # END
         output.append(f"{et_end}:")
-
 
 
 
@@ -155,16 +165,13 @@ def genStmt(nodo):
         cond_reg = genExp(nodo.condicion)
         output.append(f"beq {cond_reg}, $zero, {et_exit}  # while false -> exit")
 
-        if nodo.entonces:
-            if nodo.entonces.exp == TipoExpresion.Compound:
-                for stmt in nodo.entonces.sentencias:
-                    genStmt(stmt)
-            else:
-                genStmt(nodo.entonces)
-
+        if nodo.entonces.exp == TipoExpresion.Compound:
+            for stmt in nodo.entonces.sentencias:
+                genStmt(stmt)
+        else:
+            genStmt(nodo.entonces)
         output.append(f"j {et_start}")
         output.append(f"{et_exit}:")
-
 
     elif nodo.exp == TipoExpresion.Return:
         if nodo.expresion:
@@ -181,22 +188,30 @@ def genExp(nodo):
     elif nodo.exp == TipoExpresion.Var:
         offset = offsets.get(nodo.nombre)
         reg = nueva_temp()
-        if offset is not None:
+        # Detectar si es variable global
+        global_scope = Semantica.tabla_global
+        is_global = nodo.nombre in global_scope.symbols and global_scope.symbols[nodo.nombre].sym_type == "var"
+        if offset is not None and not is_global:
             if nodo.indice:
                 indice_reg = genExp(nodo.indice)
                 output.append(f"li {reg}, {offset}")
                 output.append(f"mul {indice_reg}, {indice_reg}, 4")
                 output.append(f"add {reg}, {reg}, {indice_reg}")
-                if offset >= 0:
-                    output.append(f"add {reg}, {reg}, $fp")
-                else:
-                    output.append(f"add {reg}, {reg}, $sp")
+                output.append(f"add {reg}, {reg}, $fp")
                 output.append(f"lw {reg}, 0({reg})")
             else:
-                if offset >= 0:
-                    output.append(f"lw {reg}, {offset}($fp)  # cargar param {nodo.nombre}")
-                else:
-                    output.append(f"lw {reg}, {offset}($sp)  # cargar var {nodo.nombre}")
+                output.append(f"lw {reg}, {offset}($fp)  # cargar var/param {nodo.nombre}")
+        elif is_global:
+            if nodo.indice:
+                base_reg = nueva_temp()
+                output.append(f"la {base_reg}, {nodo.nombre}")
+                indice_reg = genExp(nodo.indice)
+                output.append(f"mul {indice_reg}, {indice_reg}, 4")
+                output.append(f"add {base_reg}, {base_reg}, {indice_reg}")
+                output.append(f"lw {reg}, 0({base_reg})")
+            else:
+                output.append(f"la {reg}, {nodo.nombre}")
+                output.append(f"lw {reg}, 0({reg})")
         else:
             output.append(f"# ERROR: variable {nodo.nombre} no tiene offset asignado")
         return reg
@@ -205,24 +220,32 @@ def genExp(nodo):
         var_name = nodo.hijoIzq.nombre
         valor = genExp(nodo.hijoDer)
         offset = offsets.get(var_name)
-        if offset is not None:
+        # Detectar si es variable global
+        global_scope = Semantica.tabla_global
+        is_global = var_name in global_scope.symbols and global_scope.symbols[var_name].sym_type == "var"
+        if offset is not None and not is_global:
             if nodo.hijoIzq.indice:
                 indice_reg = genExp(nodo.hijoIzq.indice)
                 temp_reg = nueva_temp()
                 output.append(f"li {temp_reg}, {offset}")
                 output.append(f"mul {indice_reg}, {indice_reg}, 4")
                 output.append(f"add {temp_reg}, {temp_reg}, {indice_reg}")
-                if offset >= 0:
-                    output.append(f"add {temp_reg}, $fp, {temp_reg}")
-                else:
-                    output.append(f"add {temp_reg}, $sp, {temp_reg}")
+                output.append(f"add {temp_reg}, {temp_reg}, $fp")
                 output.append(f"sw {valor}, 0({temp_reg})  # {var_name}[...] = ...")
             else:
-                if offset >= 0:
-                    output.append(f"sw {valor}, {offset}($fp)  # asignar param {var_name}")
-                else:
-                    output.append(f"sw {valor}, {offset}($sp)  # asignar var {var_name}")
-
+                output.append(f"sw {valor}, {offset}($fp)  # asignar var/param {var_name}")
+        elif is_global:
+            if nodo.hijoIzq.indice:
+                base_reg = nueva_temp()
+                output.append(f"la {base_reg}, {var_name}")
+                indice_reg = genExp(nodo.hijoIzq.indice)
+                output.append(f"mul {indice_reg}, {indice_reg}, 4")
+                output.append(f"add {base_reg}, {base_reg}, {indice_reg}")
+                output.append(f"sw {valor}, 0({base_reg})  # {var_name}[...] = ...")
+            else:
+                addr_reg = nueva_temp()
+                output.append(f"la {addr_reg}, {var_name}")
+                output.append(f"sw {valor}, 0({addr_reg})  # asignar global {var_name}")
         else:
             output.append(f"# ERROR: variable {var_name} no tiene offset asignado")
         return valor
