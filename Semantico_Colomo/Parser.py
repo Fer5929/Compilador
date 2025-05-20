@@ -494,12 +494,12 @@ def parser(imprime=True):
         errorSintaxis("El archivo no terminó correctamente")
 
     #imprimir el árbol de sintaxis abstracta
-    #if imprime:
-     #   if isinstance(AST, list):
-     #       for nodo in AST:
-     #           imprimeAST(nodo)
-     #   else:
-     #       imprimeAST(AST)
+    if imprime:
+        if isinstance(AST, list):
+            for nodo in AST:
+                imprimeAST(nodo)
+        else:
+            imprimeAST(AST)
 
     return AST
 

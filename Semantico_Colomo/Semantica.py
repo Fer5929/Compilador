@@ -28,6 +28,7 @@ class Symbol:
         self.linea = linea if linea is not None else '?' #línea del código
         self.references = [] #referencias a la variable
         self.parametros = parametros or []  # Nueva lista para funciones
+        self.param = False
 
 #Clase para la tabla de símbolos
 class SymbolTable:
@@ -246,6 +247,8 @@ def declarar(nodo, tipo_simbolo):
     linea = getattr(nodo, 'linea', '?')
     es_arreglo = nodo.size is not None or getattr(nodo, 'esArreglo', False)
     simbolo = Symbol(nombre, tipo_simbolo, tipo, es_arreglo, nodo.size, linea)
+    if tipo_simbolo == "param":
+        simbolo.param = True
     if not current_scope.insert(simbolo):
         errorSemantico(f"Error, identificador '{nombre}' ya declarado en este ámbito.", linea, nombre)
 
