@@ -28,6 +28,7 @@ class Symbol:
         self.linea = linea if linea is not None else '?' #línea del código
         self.references = [] #referencias a la variable
         self.parametros = parametros or []  # Nueva lista para funciones
+        self.param = False
 
 #Clase para la tabla de símbolos
 class SymbolTable:
@@ -246,6 +247,8 @@ def declarar(nodo, tipo_simbolo):
     linea = getattr(nodo, 'linea', '?')
     es_arreglo = nodo.size is not None or getattr(nodo, 'esArreglo', False)
     simbolo = Symbol(nombre, tipo_simbolo, tipo, es_arreglo, nodo.size, linea)
+    if tipo_simbolo == "param":
+        simbolo.param = True
     if not current_scope.insert(simbolo):
         errorSemantico(f"Error, identificador '{nombre}' ya declarado en este ámbito.", linea, nombre)
 
@@ -383,24 +386,30 @@ def typeCheck(nodo):
 
     return None
 
+tabla_global = None
+
 def semantica(tree, imprime=True):
+    global tabla_global
+
     if imprime:
         print(">> Iniciando análisis semántico...")
 
-    # llama a tabla para construir la tabla de símbolos
-    tabla(tree, imprime=False) 
+    # 👇 Asignar tabla_global justo al inicio
+    tabla_global = tabla(tree, imprime=False)
 
-    #revisa que exista un función main sino no imprime nada 
-    main_func = current_scope.lookup("main")
+    # 👇 Mover validación después
+    if tabla_global is None:
+        errorSemantico("No se pudo construir la tabla de símbolos", 1)
+        return
+
+    main_func = tabla_global.lookup("main")
     if not main_func or main_func.sym_type != "fun":
         errorSemantico("Error semántico: no se encontró la función 'main'.", 1)
         return  
 
-    #si hay main se imprime la tabla 
     if imprime:
-        imprimir_tablas(current_scope)
+        imprimir_tablas(tabla_global)
 
-    #llama a typeCheck por nodo
     for nodo in tree:
         typeCheck(nodo)
 
