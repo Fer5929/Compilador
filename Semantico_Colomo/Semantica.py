@@ -7,6 +7,7 @@ from lexer import *
 from Parser import *
 
 current_function_type = None
+semantic_error = False  # Bandera global de error
 #Variables globales para el analizador semantico
 def globales(prog, pos, long):
     global programa
@@ -93,7 +94,8 @@ def imprimir_tablas(tabla, nivel=0):
 # Función para manejar errores semánticos con el mismo formato que el parser
 #Se obtuvo el apoyo de copilot para la implementación de esta función
 def errorSemantico(mensaje, linea, nombre=None):
-    global programa, posicion, progLong
+    global semantic_error
+    semantic_error = True  # <-- Marca error
     
     # Encontrar la posición del error en el programa
     posicionError = 0

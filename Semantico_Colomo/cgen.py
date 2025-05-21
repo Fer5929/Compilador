@@ -33,6 +33,26 @@ def generar_data_section():
     return data_lines
 
 def codeGen(AST, filename):
+    # Importar banderas de error actualizadas
+    from lexer import lexer_error
+    from Parser import parser_error
+    from Semantica import semantic_error
+
+    # Si hay errores léxicos, no se genera código
+    if lexer_error:
+        print("\033[91mSe detectaron errores léxicos | Generación de código abortada.\033[0m")
+        return  # No genera nada
+
+    # Si hay errores de análisis sintáctico, no se genera código
+    if parser_error:
+        print("\033[91mSe detectaron errores sintácticos | Generación de código abortada.\033[0m")
+        return  
+
+    # Si hay errores semánticos, no se genera código
+    if semantic_error:
+        print("\033[91mSe detectaron errores semánticos | Generación de código abortada.\033[0m")
+        return  
+    
     global output, temp_count, offsets, offset_actual
     output = []
     temp_count = 0
@@ -45,6 +65,9 @@ def codeGen(AST, filename):
     output.append(".text")
 
     for nodo in AST:
+        # Si el nodo es none
+        # if nodo is None:
+        #     continue
         if nodo.exp == TipoExpresion.FunDecl:
             scope = None
             for child in Semantica.tabla_global.children:
@@ -61,7 +84,7 @@ def codeGen(AST, filename):
                         param_index += 1
                     else:
                         if getattr(var, "is_array", False) and getattr(var, "size", 0):
-                            offset_actual -= int (var.size) * 4
+                            offset_actual -= int(var.size) * 4
                         else:
                             offset_actual -= 4
                         offsets[var.name] = offset_actual
@@ -90,10 +113,12 @@ def genFun(nodo, is_main=False):
     if local_size > 0:
         output.append(f"sub $sp, $sp, {local_size}")
 
-    # Detectar tipo de función
-    global_scope = Semantica.tabla_global
-    fun_symbol = global_scope.symbols.get(nodo.nombre)
-    tipo_funcion = getattr(fun_symbol, "tipo", None)
+    # Detectar tipo de función (preferir nodo.tipo)
+    tipo_funcion = getattr(nodo, "tipo", None)
+    if tipo_funcion is None:
+        global_scope = Semantica.tabla_global
+        fun_symbol = global_scope.symbols.get(nodo.nombre)
+        tipo_funcion = getattr(fun_symbol, "tipo", None)
 
     # Bandera para saber si hubo return
     hubo_return = False
@@ -106,7 +131,7 @@ def genFun(nodo, is_main=False):
             genStmt(stmt)
 
     # Si es función int y no hubo return, devolver 1 por defecto
-    if tipo_funcion == "int" and not hubo_return:
+    if is_main and tipo_funcion == "int" and not hubo_return:
         output.append("li $v0, 1  # return por defecto")
 
     # Liberar espacio para locales si fue reservado
@@ -114,17 +139,13 @@ def genFun(nodo, is_main=False):
         output.append(f"add $sp, $sp, {local_size}")
 
     if is_main:
-        # Detectar tipo de función main
-        global_scope = Semantica.tabla_global
-        fun_symbol = global_scope.symbols.get(nodo.nombre)
-        tipo_funcion = getattr(fun_symbol, "tipo", None)
-
+        # Main caso int y void
         if tipo_funcion == "int":
-            # Imprimir el valor de retorno (ya en $v0)
+            # Solo aceptar int 
             output.append("move $a0, $v0")
             output.append("li $v0, 1")         # syscall: print int
             output.append("syscall")
-
+            
         output.append("li $v0, 10")        # syscall: exit
         output.append("syscall")
     else:
@@ -133,6 +154,7 @@ def genFun(nodo, is_main=False):
         output.append("lw $ra, 4($sp)")
         output.append("add $sp, $sp, 8")
         output.append("jr $ra")
+
 
 
 def genStmt(nodo):

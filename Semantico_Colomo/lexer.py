@@ -5,6 +5,7 @@ linea = 1
 inicioLinea = 0
 posicionTokenActual = 0
 errorToken=False
+lexer_error = False  # Bandera global de error
 #Funcion para inicializar las variables globales como pedida en las instrucciones
 #Se hizo el cambio de nombre de función para que no se confunda con la función de globales
 #Como referencia de este cambio se revisó la parte de el scanner.py y parser.py para TINY proporcionados
@@ -70,6 +71,7 @@ def reconocer():
     global progLong
     global linea
     global inicioLinea
+    global lexer_error
 
     estado = 0
     lexema = ''
@@ -314,6 +316,7 @@ def reconocer():
 
     #Si el estado es 99, significa que hay un error
     elif estado == 99:
+        lexer_error = True
         while posicion < progLong:
             c = programa[posicion]
             if c in separadores:

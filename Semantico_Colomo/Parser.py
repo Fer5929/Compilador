@@ -6,7 +6,7 @@
 from enum import Enum
 from lexer import *
 from globalTypes import *
-Error = False
+parser_error = False  # Bandera global de error
  
 #Clase para enumerar los tipos de expresiones
 class TipoExpresion(Enum):
@@ -60,6 +60,8 @@ sync_tokens = {
 
 #Función para el manejo de errores, marca con ^el error, y muestra el detalle de error sintactico 
 def errorSintaxis(mensaje):
+    global parser_error
+    parser_error = True  # <-- Marca error
     #obtener información de error usando la función info_error() dentro del lexer 
     linea, contenido, pos_error, inicioErrorLinea, finErrorLinea, posicionTokenAnterior, posicionTokenActual, contenido_anterior= info_error()
     global programa, posicion, progLong
