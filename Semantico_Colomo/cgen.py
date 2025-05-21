@@ -282,12 +282,34 @@ def genExp(nodo):
         return res
 
     elif nodo.exp == TipoExpresion.Call:
+        # Soporte para output(x)
+        if nodo.nombre == "output" and len(nodo.args) == 1:
+            val = genExp(nodo.args[0])
+            output.append(f"move $a0, {val}")
+            output.append("li $v0, 1")  # syscall: print int
+            output.append("syscall")
+            return "$zero"
+        # Soporte para input()
+        if nodo.nombre == "input" and len(nodo.args) == 0:
+            reg = nueva_temp()
+            output.append("li $v0, 5")  # syscall: read int
+            output.append("syscall")
+            output.append(f"move {reg}, $v0")
+            return reg
+        # Llamadas normales
         for arg in reversed(nodo.args):
             val = genExp(arg)
             output.append("sub $sp, $sp, 4")
             output.append(f"sw {val}, 0($sp)")
         output.append(f"jal {nodo.nombre}")
         output.append(f"add $sp, $sp, {len(nodo.args) * 4}")
+        # Detectar si la función es void
+        global_scope = Semantica.tabla_global
+        fun_symbol = global_scope.symbols.get(nodo.nombre)
+        if fun_symbol and getattr(fun_symbol, "tipo", None) == "void":
+            return None  # No retorna valor
         res = nueva_temp()
         output.append(f"move {res}, $v0")
         return res
+
+    return "$zero"  # Por defecto, retornar $zero si no se cumple ninguna condición
