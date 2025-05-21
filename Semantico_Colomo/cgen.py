@@ -90,20 +90,40 @@ def genFun(nodo, is_main=False):
     if local_size > 0:
         output.append(f"sub $sp, $sp, {local_size}")
 
+    # Detectar tipo de función
+    global_scope = Semantica.tabla_global
+    fun_symbol = global_scope.symbols.get(nodo.nombre)
+    tipo_funcion = getattr(fun_symbol, "tipo", None)
+
+    # Bandera para saber si hubo return
+    hubo_return = False
+
     # Generar cuerpo de la función
     if nodo.cuerpo:
         for stmt in nodo.cuerpo.sentencias:
+            if stmt.exp == TipoExpresion.Return:
+                hubo_return = True
             genStmt(stmt)
+
+    # Si es función int y no hubo return, devolver 1 por defecto
+    if tipo_funcion == "int" and not hubo_return:
+        output.append("li $v0, 1  # return por defecto")
 
     # Liberar espacio para locales si fue reservado
     if local_size > 0:
         output.append(f"add $sp, $sp, {local_size}")
 
     if is_main:
-        # Imprimir el valor de retorno (ya en $v0)
-        output.append("move $a0, $v0")
-        output.append("li $v0, 1")         # syscall: print int
-        output.append("syscall")
+        # Detectar tipo de función main
+        global_scope = Semantica.tabla_global
+        fun_symbol = global_scope.symbols.get(nodo.nombre)
+        tipo_funcion = getattr(fun_symbol, "tipo", None)
+
+        if tipo_funcion == "int":
+            # Imprimir el valor de retorno (ya en $v0)
+            output.append("move $a0, $v0")
+            output.append("li $v0, 1")         # syscall: print int
+            output.append("syscall")
 
         output.append("li $v0, 10")        # syscall: exit
         output.append("syscall")
